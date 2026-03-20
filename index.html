@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>NutriTimer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⏱</text></svg>"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+  /* ============================================================
+     NUTRITIMER — GLOBAL STYLES
+     ============================================================
+     Dark theme, monospace, minimal scrollbars.
+     Mobile-first: base styles target phones, media queries scale up.
+  */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #080c14; overflow-x: hidden; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 6px #4ade8088} 50%{box-shadow:0 0 14px #4ade80cc} }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: #080c14; }
+  ::-webkit-scrollbar-thumb { background: #1e293b; }
+  /* Touch feedback for interactive elements */
+  .tap-target { -webkit-tap-highlight-color: transparent; cursor: pointer; }
+  .tap-target:active { opacity: 0.75; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+/* ================================================================
+   NUTRITIMER — MEAL TIMING DASHBOARD
+   ================================================================
+   PURPOSE:
+   Real-time dashboard that tells the user exactly what to eat and when,
+   based on their workout schedule for the day. All meals are designed
+   around insulin timing and carbohydrate availability for training.
+
+   CORE PRINCIPLES:
+   1. Carbs BEFORE the gym — at least 1-2 carb meals digested before training.
+      The user has learned the hard way that training on empty glycogen = bad.
+   2. Fat AFTER the gym (or on rest days) — post-workout GLUT4 elevation
+      means fat is partitioned efficiently. On rest days, low insulin means
+      dietary fat goes to oxidation, not storage.
+   3. No breakfast — morning is reserved for fasted 10K steps (fat oxidation
+      at peak during low-intensity fasted cardio). First meal at 08:30+.
+   4. Rest days (Sun/Thu) are auto-detected, not toggleable — prevents the
+      temptation to adjust schedule and lose discipline.
+
+   CALORIE TARGET: ~1500 kcal
+   - Aggressive but safe cut for body recomposition / weight loss
+   - Protein kept high (~170g) to preserve muscle during deficit
+   - Workout days: ~170P / ~110C / ~40F (carbs fuel the session)
+   - Rest days:    ~170P / ~50C  / ~65F (low carb, higher fat for hormones)
+
+   FOOD SOURCING: All items available at Tesco Dun Laoghaire, Ireland.
+   - Turkey breast fillets (~€5-7/500g) — lean protein for carb meals
+   - Beef mince 10% fat (~€3-4/500g) — cheaper than 3%, provides needed fat
+     without excess; reduces dependence on added olive oil
+   - Tuna in brine — cheapest lean protein, zero fat conflict with carbs
+   - Bulgur wheat / potato — moderate GI starch, sustained energy
+   - Red lentil pasta — slower-digesting post-workout carb, extra protein
+   - Olive oil (extra virgin) — healthy fats for hormone maintenance
+   - Spinach, broccoli, kimchi — unlimited greens, gut health
+
+   SUPPLEMENT NOTES (bought in-store, not tracked as separate events):
+   - ON Pre-Workout (contains 3.4g creatine) — take 30min before gym
+   - Creatine 5g standalone — rest days only (pre-workout covers gym days)
+   - Omega-3 (Seven Seas Max Strength) — take with first meal containing fat
+   - ON Electrolyte Powder — sip during gym (~5g carbs, count toward total)
+   - Plenny Pro (Jimmy Joy) — 40g protein, 400kcal meal replacement for on-the-go
+
+   WORKOUT PRESETS:
+   The user can select when they're training. Meals reorder automatically:
+   - MORNING (08:00): Quick banana pre-gym, then post-workout meal + 3 more
+   - MIDDAY  (14:00): 2 carb meals before gym, post-workout + 1 evening meal
+   - EVENING (18:00): 3 carb meals through the day, post-workout dinner (default)
+
+   The preset selection persists in localStorage so it survives page reloads.
+   ================================================================ */
+
+const { useState, useEffect, useCallback } = React;
+
+/* ----------------------------------------------------------------
+   CONSTANTS
+   ---------------------------------------------------------------- */
+const DAY_NAMES   = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const padZ = (n) => String(n).padStart(2, "0");
+const toMin = (t) => { const [h,m] = t.split(":").map(Number); return h * 60 + m; };
+
+/* Timeline boundaries — 06:00 to 23:00 */
+const DAY_START = 6 * 60;
+const DAY_END   = 23 * 60;
+
+/* Colour coding by event type */
+const TYPE_COLORS = {
+  meal:       "#4ade80",  /* green  — food */
+  fuel:       "#fb923c",  /* orange — quick pre-gym fuel */
+  gym:        "#60a5fa",  /* blue   — training */
+};
+
+/* Plenny Pro replacement — used when user taps "swap" on any meal */
+const PLENNY_PRO = {
+  label: "PLENNY PRO",
+  tag: "MEAL REPLACEMENT",
+  items: ["1 serving Plenny Pro shake", "Mix with 400ml cold water"],
+  note: "Jimmy Joy Plenny Pro — 40g protein, 400kcal. Use when you're on the go and can't prep a real meal. Log in Cronometer and adjust remaining meals if needed.",
+  supplements: [],
+};
+
+/* ----------------------------------------------------------------
+   MEAL TEMPLATES
+   ----------------------------------------------------------------
+   Each meal is a template that gets slotted into different time
+   positions depending on the workout preset. The `role` field
+   determines where it can be placed:
+   - "carb"     : carb + lean protein, placed BEFORE gym
+   - "pre-gym"  : carb + protein, must be the last meal before gym
+   - "post-gym" : carb + protein + fat, placed immediately AFTER gym
+   - "fat"      : fat + protein, no carbs, placed after gym / rest days
+   - "fuel"     : quick pre-gym carbs (morning gym only)
+
+   On REST DAYS, a separate set of meals is used — only the first
+   meal contains carbs, the rest are fat+protein.
+   ---------------------------------------------------------------- */
+
+/* === WORKOUT DAY MEAL COMPONENTS ===
+   These are assembled into schedules by each preset below. */
+
+const MEAL_FUEL = {
+  id: "fuel", label: "PRE-GYM FUEL", type: "fuel",
+  tag: "FAST CARBS",
+  items: [
+    "1 banana",
+    "30g whey protein in water",
+  ],
+  note: "Minimal digestion time needed — banana glucose peaks in ~20min, whey absorbs in ~30min. This is NOT a full meal. Take your pre-workout 30min before the session. Morning gym means no fasted walk today — the gym IS the exercise.",
+  supplements: ["ON Pre-Workout — take at 07:30"],
+};
+
+const MEAL_CARB_A = {
+  id: "carb-a", label: "MEAL", type: "meal",
+  tag: "CARB + PROTEIN",
+  items: [
+    "150g turkey breast",
+    "100g cooked bulgur wheat",
+    "Spinach — unlimited",
+  ],
+  note: "Lean protein + moderate-GI starch. Zero added fat keeps insulin response clean for carb partitioning into muscle glycogen. Take omega-3 capsule with a later meal that contains fat.",
+  supplements: [],
+};
+
+const MEAL_CARB_B = {
+  id: "carb-b", label: "MEAL", type: "meal",
+  tag: "CARB + LEAN PROTEIN",
+  items: [
+    "130g tuna in brine",
+    "100g cooked bulgur wheat",
+    "Broccoli — unlimited",
+    "Kimchi — add freely",
+  ],
+  note: "Tuna is the leanest protein option — zero fat conflict with carbs. Kimchi supports gut health and insulin sensitivity over time. Broccoli is unlimited fibre.",
+  supplements: [],
+};
+
+const MEAL_PRE_GYM = {
+  id: "pre-gym", label: "MEAL", type: "meal",
+  tag: "PRE-GYM · CARB + PROTEIN",
+  items: [
+    "150g turkey breast",
+    "1 banana",
+    "100g cooked bulgur OR potato",
+    "Spinach — unlimited",
+  ],
+  note: "Two-wave carb delivery: banana peaks ~30min for gym start, bulgur/potato sustains through the session. Zero fat — fastest gastric emptying. Do NOT skip the starch — this is what fuels the workout. Take pre-workout 30min before gym.",
+  supplements: ["ON Pre-Workout — 30min before gym"],
+};
+
+const MEAL_POST_GYM = {
+  id: "post-gym", label: "MEAL", type: "meal",
+  tag: "POST-WORKOUT · CARB + PROTEIN + FAT",
+  items: [
+    "150g beef mince (10% fat)",
+    "75g cooked red lentil pasta",
+    "15ml extra virgin olive oil",
+    "Broccoli — unlimited",
+    "Kimchi — add freely",
+  ],
+  note: "Post-workout GLUT4 elevation means fat is efficiently partitioned — beef mince and olive oil close the daily fat target cleanly. 10% mince is cheaper than 3% and provides needed fat naturally, reducing olive oil dependence. Lentil pasta is slower-digesting — ideal post-workout recovery. Take creatine now if it's a gym day (pre-workout already has it, but extra 5g with this insulin spike aids muscle uptake). Take omega-3 here — fat present aids absorption.",
+  supplements: [
+    "Omega-3 — 1 capsule (Seven Seas Max Strength)",
+  ],
+};
+
+const MEAL_FAT_A = {
+  id: "fat-a", label: "MEAL", type: "meal",
+  tag: "FAT + PROTEIN · NO CARBS",
+  items: [
+    "130g tuna in brine",
+    "15ml extra virgin olive oil",
+    "Broccoli — unlimited",
+    "Spinach — unlimited",
+  ],
+  note: "No carbs = no insulin spike = dietary fat goes to oxidation, not storage. Tuna provides lean protein, olive oil provides essential fats for hormone maintenance. Keep it simple.",
+  supplements: [],
+};
+
+const MEAL_FAT_B = {
+  id: "fat-b", label: "MEAL", type: "meal",
+  tag: "FAT + PROTEIN · NO CARBS",
+  items: [
+    "150g turkey breast",
+    "15ml extra virgin olive oil",
+    "Spinach — unlimited",
+    "Cucumber or greens",
+  ],
+  note: "Low insulin going into the evening. Turkey provides slow-digesting protein to feed muscles overnight. Olive oil adds final fat contribution.",
+  supplements: [],
+};
+
+/* === REST DAY MEALS ===
+   Only the first meal has carbs. The rest are fat+protein to keep
+   insulin low and maximise fat oxidation for the remaining 12+ hours.
+   Auto-triggered on Sunday and Thursday. */
+
+const REST_MEAL_1 = {
+  id: "rest-1", label: "MEAL 1", type: "meal",
+  tag: "LAST CARB MEAL TODAY",
+  items: [
+    "150g turkey breast",
+    "100g cooked bulgur wheat",
+    "Spinach — unlimited",
+  ],
+  note: "Last starch of the day. No carbs after this on rest days — afternoon insulin stays low, maximising fat oxidation for the remaining 12+ hours.",
+  supplements: ["Omega-3 — 1 capsule (with a later meal containing fat)"],
+};
+
+const REST_MEAL_2 = {
+  id: "rest-2", label: "MEAL 2", type: "meal",
+  tag: "NO CARBS",
+  items: [
+    "150g turkey breast",
+    "2 whole eggs",
+    "Spinach — unlimited",
+    "Broccoli — unlimited",
+  ],
+  note: "Eggs belong here — fat + protein with zero carbs means no insulin spike to drive fat storage. This is the correct slot for whole eggs on rest days.",
+  supplements: [],
+};
+
+const REST_MEAL_3 = {
+  id: "rest-3", label: "MEAL 3", type: "meal",
+  tag: "NO CARBS",
+  items: [
+    "150g beef mince (10% fat)",
+    "20ml extra virgin olive oil",
+    "Broccoli — unlimited",
+    "Spinach — unlimited",
+  ],
+  note: "Beef mince and olive oil close the rest-day fat target. No carbs present — no insulin to shuttle dietary fat into storage. Fat goes to oxidation and hormone maintenance.",
+  supplements: ["Creatine 5g standalone — rest day maintenance dose"],
+};
+
+const REST_MEAL_4 = {
+  id: "rest-4", label: "MEAL 4", type: "meal",
+  tag: "NO CARBS",
+  items: [
+    "130g tuna in brine",
+    "15ml extra virgin olive oil",
+    "Cucumber or greens",
+  ],
+  note: "Low insulin going into sleep. Tuna provides slow-digesting protein to feed muscles overnight. Olive oil adds final fat contribution. Maximises overnight GH release and fat oxidation.",
+  supplements: [],
+};
+
+/* ----------------------------------------------------------------
+   WORKOUT PRESETS
+   ----------------------------------------------------------------
+   Each preset defines the full schedule of events for a workout day.
+   The meals are ordered to ensure sufficient carb loading before the
+   gym session. The `time` and `endTime` fields set the timeline
+   positions and eating windows.
+
+   KEY RULE: At least 1.5 hours between last carb meal end and gym
+   start, to allow gastric emptying and glucose absorption.
+   ---------------------------------------------------------------- */
+
+const PRESETS = {
+  morning: {
+    id: "morning",
+    label: "MORNING",
+    gymTime: "08:00",
+    desc: "Gym at 08:00 · Quick fuel only · No fasted walk today",
+    /* Morning is the toughest for carb loading — only a banana + whey
+       before the session. The post-workout meal is the big carb hit.
+       Remaining meals taper from carb to fat through the day. */
+    events: [
+      { ...MEAL_FUEL,     time: "06:30", endTime: "07:30" },
+      { type: "gym", id: "gym", label: "GYM", tag: "TRAINING", time: "08:00", endTime: "09:30",
+        items: ["Resistance training session", "Sip ON Electrolytes throughout (~5g carbs)"],
+        note: "Morning session — glycogen from last night's dinner + banana fuel. Expect solid performance for compound lifts. Catecholamines suppress insulin ~40-60%, GLUT4 drives glucose uptake independently. Electrolyte drink sustains mid-session.",
+        supplements: ["ON Electrolyte Powder — sip throughout"],
+      },
+      { ...MEAL_POST_GYM, time: "10:00", endTime: "13:00", label: "MEAL 1" },
+      { ...MEAL_CARB_A,   time: "13:00", endTime: "16:30", label: "MEAL 2" },
+      { ...MEAL_FAT_A,    time: "16:30", endTime: "20:00", label: "MEAL 3" },
+      { ...MEAL_FAT_B,    time: "20:00", endTime: "22:30", label: "MEAL 4" },
+    ],
+  },
+
+  midday: {
+    id: "midday",
+    label: "MIDDAY",
+    gymTime: "14:00",
+    desc: "Gym at 14:00 · 2 carb meals before · Best balance",
+    /* Midday is the sweet spot — two full carb meals digested before
+       the session. Post-workout carb+fat meal, then a light fat+protein
+       dinner. Good carb availability without the late-night eating. */
+    events: [
+      { ...MEAL_CARB_A,   time: "08:30", endTime: "12:00", label: "MEAL 1" },
+      { ...MEAL_PRE_GYM,  time: "12:00", endTime: "13:30", label: "MEAL 2" },
+      { type: "gym", id: "gym", label: "GYM", tag: "TRAINING", time: "14:00", endTime: "15:30",
+        items: ["Resistance training session", "Sip ON Electrolytes throughout (~5g carbs)"],
+        note: "Two carb meals digested — glycogen is loaded. Peak performance window. Catecholamines suppress insulin ~40-60%, GLUT4 drives glucose uptake independently.",
+        supplements: ["ON Electrolyte Powder — sip throughout"],
+      },
+      { ...MEAL_POST_GYM, time: "16:00", endTime: "20:00", label: "MEAL 3" },
+      { ...MEAL_FAT_A,    time: "20:00", endTime: "22:30", label: "MEAL 4" },
+    ],
+  },
+
+  evening: {
+    id: "evening",
+    label: "EVENING",
+    gymTime: "18:00",
+    desc: "Gym at 18:00 · 3 carb meals · Maximum fuel · Default",
+    /* Evening is the original plan and the default — three carb meals
+       throughout the day means glycogen is fully stocked. The tradeoff
+       is a late post-workout dinner at 20:30. */
+    events: [
+      { ...MEAL_CARB_A,   time: "08:30", endTime: "12:30", label: "MEAL 1" },
+      { ...MEAL_CARB_B,   time: "12:30", endTime: "16:30", label: "MEAL 2" },
+      { ...MEAL_PRE_GYM,  time: "16:30", endTime: "17:30", label: "MEAL 3" },
+      { type: "gym", id: "gym", label: "GYM", tag: "TRAINING", time: "18:00", endTime: "19:30",
+        items: ["Resistance training session", "Sip ON Electrolytes throughout (~5g carbs)"],
+        note: "Three carb meals digested — maximum glycogen. This is the highest-performance option. Catecholamines suppress insulin ~40-60%, GLUT4 drives glucose uptake independently. Prime fat-burn window.",
+        supplements: ["ON Electrolyte Powder — sip throughout"],
+      },
+      { ...MEAL_POST_GYM, time: "20:30", endTime: "22:30", label: "MEAL 4" },
+    ],
+  },
+};
+
+/* Rest day schedule — same regardless of preset */
+const REST_EVENTS = [
+  { ...REST_MEAL_1, time: "08:30", endTime: "12:30" },
+  { ...REST_MEAL_2, time: "12:30", endTime: "16:30" },
+  { ...REST_MEAL_3, time: "16:30", endTime: "20:30" },
+  { ...REST_MEAL_4, time: "20:30", endTime: "22:30" },
+];
+
+/* ----------------------------------------------------------------
+   HELPER: Rest day detection
+   ----------------------------------------------------------------
+   Rest days are Sunday (0) and Thursday (4). This is auto-detected
+   and NOT toggleable — to preserve discipline. */
+const isRestDay = (d) => d.getDay() === 0 || d.getDay() === 4;
+
+/* ----------------------------------------------------------------
+   HELPER: Countdown formatter
+   ---------------------------------------------------------------- */
+const formatCountdown = (diffMs) => {
+  if (diffMs <= 0) return "NOW";
+  const totalSec = Math.floor(diffMs / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${padZ(m)}m`;
+  if (m > 0) return `${m}m ${padZ(s)}s`;
+  return `${s}s`;
+};
+
+/* ----------------------------------------------------------------
+   HELPER: localStorage with fallback
+   ---------------------------------------------------------------- */
+const loadPreset = () => {
+  try { return localStorage.getItem("nutritimer-preset") || "evening"; }
+  catch { return "evening"; }
+};
+const savePreset = (v) => {
+  try { localStorage.setItem("nutritimer-preset", v); } catch {}
+};
+const loadSwaps = () => {
+  try { return JSON.parse(localStorage.getItem("nutritimer-swaps") || "{}"); }
+  catch { return {}; }
+};
+const saveSwaps = (v) => {
+  try { localStorage.setItem("nutritimer-swaps", JSON.stringify(v)); } catch {}
+};
+
+/* ================================================================
+   MAIN DASHBOARD COMPONENT
+   ================================================================ */
+function Dashboard() {
+  /* --- State --- */
+  const [now, setNow]         = useState(new Date());
+  const [preset, setPreset]   = useState(loadPreset);
+  /* plenny: { [eventId]: true } — which meals are swapped to Plenny Pro */
+  const [plenny, setPlenny]   = useState(loadSwaps);
+
+  /* --- Clock tick every second --- */
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  /* --- Persist preset selection --- */
+  const selectPreset = useCallback((p) => {
+    setPreset(p);
+    savePreset(p);
+  }, []);
+
+  /* --- Toggle Plenny Pro swap for a meal --- */
+  const togglePlenny = useCallback((eventId) => {
+    setPlenny(prev => {
+      const next = { ...prev };
+      if (next[eventId]) delete next[eventId];
+      else next[eventId] = true;
+      saveSwaps(next);
+      return next;
+    });
+  }, []);
+
+  /* --- Derived state --- */
+  const rest   = isRestDay(now);
+  const events = rest ? REST_EVENTS : PRESETS[preset].events;
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+
+  /* Find current and next events */
+  let currentEvent = null, nextEvent = null;
+  for (let i = 0; i < events.length; i++) {
+    const s = toMin(events[i].time);
+    const e = toMin(events[i].endTime);
+    if (nowMin >= s && nowMin < e) {
+      currentEvent = events[i];
+      nextEvent = events[i + 1] || null;
+      break;
+    }
+    if (nowMin < s) {
+      nextEvent = events[i];
+      break;
+    }
+  }
+  const allDone   = !currentEvent && !nextEvent && nowMin >= toMin(events[events.length - 1].endTime);
+  const beforeDay = !currentEvent && !nextEvent && nowMin < toMin(events[0].time);
+
+  /* Countdown to next event */
+  let countdownMs = null;
+  if (nextEvent) {
+    const midnight = new Date(now);
+    midnight.setHours(0, 0, 0, 0);
+    countdownMs = midnight.getTime() + toMin(nextEvent.time) * 60000 - now.getTime();
+  }
+
+  /* Timeline position (0-100%) */
+  const timelinePct = Math.min(100, Math.max(0, ((nowMin - DAY_START) / (DAY_END - DAY_START)) * 100));
+  const hourTicks = [6, 8, 10, 12, 14, 16, 18, 20, 22];
+
+  /* Clock display */
+  const hh = padZ(now.getHours());
+  const mm = padZ(now.getMinutes());
+  const ss = padZ(now.getSeconds());
+
+  /* ----------------------------------------------------------------
+     RENDER HELPERS
+     ---------------------------------------------------------------- */
+
+  /* Render a single meal/event card */
+  const renderEventCard = (ev, isCurrent, dimmed) => {
+    if (!ev) return null;
+    const c = TYPE_COLORS[ev.type] || "#4ade80";
+    const isSwapped = ev.type === "meal" && plenny[ev.id];
+    const display = isSwapped ? { ...PLENNY_PRO, id: ev.id, type: "meal", time: ev.time, endTime: ev.endTime } : ev;
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        {/* Header */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            {isCurrent && (
+              <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: c, animation: "pulse 2s ease-in-out infinite", flexShrink: 0 }}/>
+            )}
+            <span style={{ fontSize: "20px", fontWeight: "bold", color: isCurrent ? c : "#64748b" }}>{display.label}</span>
+          </div>
+          {display.tag && (
+            <div style={{
+              display: "inline-block", marginTop: "6px",
+              padding: "2px 10px", borderRadius: "2px",
+              fontSize: "9px", letterSpacing: "2px", fontWeight: "bold",
+              background: isCurrent ? c + "22" : c + "11",
+              color: isCurrent ? c : "#475569",
+            }}>{display.tag}</div>
+          )}
+        </div>
+
+        {/* Items */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
+          {display.items.map((item, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+              <span style={{ color: isCurrent ? c : "#334155", flexShrink: 0, marginTop: "1px" }}>›</span>
+              <span style={{ fontSize: "14px", color: isCurrent ? "#cbd5e1" : "#475569", lineHeight: "1.4" }}>{item}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Supplements */}
+        {display.supplements && display.supplements.length > 0 && (
+          <div style={{
+            background: "#facc1511", border: "1px solid #facc1533",
+            borderRadius: "4px", padding: "10px 14px",
+          }}>
+            <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#facc15", marginBottom: "6px" }}>SUPPLEMENTS</div>
+            {display.supplements.map((s, i) => (
+              <div key={i} style={{ fontSize: "12px", color: "#fde68a", lineHeight: "1.6" }}>· {s}</div>
+            ))}
+          </div>
+        )}
+
+        {/* Note */}
+        <div style={{ fontSize: "11px", color: dimmed ? "#334155" : "#475569", lineHeight: "1.5", borderTop: "1px solid #1e293b", paddingTop: "10px" }}>
+          {display.note}
+        </div>
+
+        {/* Time window */}
+        <div style={{ fontSize: "10px", color: "#334155" }}>
+          Window: {ev.time} – {ev.endTime}
+        </div>
+
+        {/* Plenny Pro swap button — only for meal-type events */}
+        {ev.type === "meal" && (
+          <div
+            className="tap-target"
+            onClick={() => togglePlenny(ev.id)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              padding: "8px 14px", borderRadius: "4px",
+              background: isSwapped ? "#fb923c22" : "#1e293b44",
+              border: `1px solid ${isSwapped ? "#fb923c55" : "#1e293b"}`,
+              fontSize: "11px", fontWeight: "bold", letterSpacing: "1px",
+              color: isSwapped ? "#fb923c" : "#475569",
+              alignSelf: "flex-start",
+              transition: "all 0.2s",
+            }}
+          >
+            {isSwapped ? "↩ SWAP BACK" : "⚡ PLENNY PRO"}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  /* ----------------------------------------------------------------
+     MAIN RENDER
+     ---------------------------------------------------------------- */
+  return (
+    <div style={{
+      background: "#080c14", minHeight: "100vh", display: "flex", flexDirection: "column",
+      padding: "16px", fontFamily: "'Courier New', Courier, monospace",
+      color: "#e2e8f0", gap: "14px", maxWidth: "900px", margin: "0 auto",
+    }}>
+
+      {/* ═══════════════════════════════════════════════════════════
+          TOP BAR — Clock, date, day type badge
+          ═══════════════════════════════════════════════════════════ */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+        <div>
+          <div style={{
+            fontSize: "48px", fontWeight: "bold", lineHeight: 1,
+            letterSpacing: "-2px", color: "#f1f5f9", fontVariantNumeric: "tabular-nums",
+          }}>
+            {hh}<span style={{ color: "#334155", animation: "blink 1s step-end infinite" }}>:</span>{mm}
+            <span style={{ fontSize: "22px", color: "#475569", marginLeft: "4px" }}>{ss}</span>
+          </div>
+          <div style={{ fontSize: "11px", color: "#475569", marginTop: "3px", letterSpacing: "2px" }}>
+            {DAY_NAMES[now.getDay()].toUpperCase()} {now.getDate()} {MONTH_NAMES[now.getMonth()].toUpperCase()} {now.getFullYear()}
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{
+            display: "inline-block", padding: "5px 16px", borderRadius: "3px",
+            fontSize: "12px", fontWeight: "bold", letterSpacing: "3px",
+            background: rest ? "#1a2a3a" : "#0f2a1a",
+            color: rest ? "#60a5fa" : "#4ade80",
+            border: `1px solid ${rest ? "#1e3a5f" : "#1a4a2a"}`,
+          }}>{rest ? "REST DAY" : "WORKOUT DAY"}</div>
+          <div style={{ fontSize: "10px", color: "#334155", marginTop: "4px", letterSpacing: "1px" }}>
+            {rest ? "SUN / THU · LOW CARB · NO GYM" : `GYM ${PRESETS[preset].gymTime}`}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════
+          WORKOUT PRESET SELECTOR — only shown on workout days
+          ═══════════════════════════════════════════════════════════
+          Three tap-able buttons that change when the gym session is.
+          The entire meal schedule rearranges based on selection.
+          Selection persists in localStorage. */}
+      {!rest && (
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {Object.values(PRESETS).map((p) => {
+            const active = preset === p.id;
+            return (
+              <div
+                key={p.id}
+                className="tap-target"
+                onClick={() => selectPreset(p.id)}
+                style={{
+                  flex: "1 1 0", minWidth: "90px",
+                  padding: "10px 12px", borderRadius: "6px",
+                  background: active ? "#4ade8018" : "#0d1520",
+                  border: `1px solid ${active ? "#4ade8066" : "#1e293b"}`,
+                  textAlign: "center",
+                  transition: "all 0.2s",
+                }}
+              >
+                <div style={{
+                  fontSize: "14px", fontWeight: "bold", letterSpacing: "2px",
+                  color: active ? "#4ade80" : "#475569",
+                }}>{p.label}</div>
+                <div style={{
+                  fontSize: "9px", color: active ? "#4ade8099" : "#334155",
+                  marginTop: "3px", letterSpacing: "0.5px",
+                }}>{p.desc}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════
+          TIMELINE BAR
+          ═══════════════════════════════════════════════════════════
+          Visual representation of the day from 06:00 to 23:00.
+          Each event is a coloured block, a white line marks "now". */}
+      <div style={{ userSelect: "none" }}>
+        <div style={{
+          position: "relative", height: "38px",
+          background: "#0d1520", borderRadius: "4px",
+          border: "1px solid #1e293b", overflow: "hidden",
+        }}>
+          {events.map((ev) => {
+            const s = toMin(ev.time);
+            const e = toMin(ev.endTime);
+            const left  = ((s - DAY_START) / (DAY_END - DAY_START)) * 100;
+            const width = ((e - s) / (DAY_END - DAY_START)) * 100;
+            const isCurr = currentEvent?.id === ev.id;
+            const c = TYPE_COLORS[ev.type] || "#4ade80";
+            return (
+              <div key={ev.id} style={{
+                position: "absolute", left: `${left}%`, width: `${width}%`,
+                top: "3px", bottom: "3px",
+                background: isCurr ? `${c}30` : `${c}0e`,
+                border: `1px solid ${isCurr ? c : c + "44"}`,
+                borderRadius: "2px",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                overflow: "hidden", transition: "background 0.4s",
+              }}>
+                {width >= 5 && (
+                  <span style={{
+                    fontSize: "8px", letterSpacing: "0.5px",
+                    color: isCurr ? c : c + "99",
+                    fontWeight: isCurr ? "bold" : "normal",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    padding: "0 3px",
+                  }}>{ev.label}</span>
+                )}
+              </div>
+            );
+          })}
+          {/* Now indicator */}
+          {timelinePct >= 0 && timelinePct <= 100 && (
+            <div style={{
+              position: "absolute", left: `${timelinePct}%`,
+              top: 0, bottom: 0, width: "2px",
+              background: "#f1f5f9cc", zIndex: 10,
+              boxShadow: "0 0 6px #f1f5f944",
+            }}>
+              <div style={{
+                position: "absolute", top: "-1px", left: "50%",
+                transform: "translateX(-50%)",
+                width: "6px", height: "6px",
+                background: "#f1f5f9", borderRadius: "50%",
+              }}/>
+            </div>
+          )}
+        </div>
+        {/* Hour labels */}
+        <div style={{ position: "relative", height: "16px", marginTop: "2px" }}>
+          {hourTicks.map(h => {
+            const left = ((h * 60 - DAY_START) / (DAY_END - DAY_START)) * 100;
+            return (
+              <div key={h} style={{
+                position: "absolute", left: `${left}%`,
+                transform: "translateX(-50%)",
+                fontSize: "8px", color: "#334155", letterSpacing: "0.5px",
+              }}>{padZ(h)}:00</div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════
+          MAIN PANELS — Current event (left) + Next event (right)
+          ═══════════════════════════════════════════════════════════
+          On mobile these stack vertically (flex-wrap).
+          Each panel shows the full meal details, items, supplements,
+          notes, and the Plenny Pro swap button. */}
+      <div style={{
+        display: "flex", gap: "14px", flex: 1,
+        flexWrap: "wrap",
+      }}>
+
+        {/* --- CURRENT EVENT PANEL --- */}
+        <div style={{
+          flex: "1 1 320px", minWidth: "280px",
+          background: "#0d1520",
+          border: `1px solid ${currentEvent ? (TYPE_COLORS[currentEvent.type] || "#4ade80") + "55" : "#1e293b"}`,
+          borderRadius: "6px", padding: "16px 20px",
+          display: "flex", flexDirection: "column", gap: "12px",
+        }}>
+          <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#334155" }}>▶ RIGHT NOW</div>
+
+          {allDone && (
+            <div style={{ color: "#475569", fontSize: "15px", lineHeight: "1.6" }}>
+              Day complete. Rest up.<br/>
+              Prep tomorrow's meals if you haven't already.<br/>
+              Sleep by 22:30 — GH release peaks in deep sleep.
+            </div>
+          )}
+          {beforeDay && (
+            <div>
+              <div style={{ fontSize: "18px", color: "#4ade80", fontWeight: "bold" }}>
+                {rest ? "Rest day — take it easy" : "Morning — get your 10K steps in"}
+              </div>
+              <div style={{ fontSize: "12px", color: "#475569", marginTop: "8px", lineHeight: "1.5" }}>
+                {rest
+                  ? "First meal at 08:30. No gym today — recover and let muscles repair."
+                  : preset === "morning"
+                    ? "Pre-gym fuel at 06:30. Skip the fasted walk — gym IS the exercise today."
+                    : "Fasted walk while insulin is low — peak fat oxidation window. First meal at 08:30."
+                }
+              </div>
+            </div>
+          )}
+          {!currentEvent && !allDone && !beforeDay && (
+            <div>
+              <div style={{ fontSize: "16px", color: "#64748b" }}>Between meals</div>
+              <div style={{ fontSize: "12px", color: "#334155", marginTop: "6px" }}>
+                Stay hydrated — water + High5 Zero electrolyte tablet. Target 4L daily.
+              </div>
+            </div>
+          )}
+
+          {currentEvent && renderEventCard(currentEvent, true, false)}
+        </div>
+
+        {/* --- NEXT EVENT PANEL --- */}
+        <div style={{
+          flex: "1 1 320px", minWidth: "280px",
+          background: "#0a1020", border: "1px solid #1e293b",
+          borderRadius: "6px", padding: "16px 20px",
+          display: "flex", flexDirection: "column", gap: "12px",
+          opacity: nextEvent ? 1 : 0.35,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#334155" }}>↗ UP NEXT</div>
+            {nextEvent && countdownMs !== null && (
+              <div style={{
+                fontSize: "22px", fontWeight: "bold",
+                color: countdownMs < 30 * 60000 ? "#f97316" : "#475569",
+                fontVariantNumeric: "tabular-nums", letterSpacing: "-1px",
+              }}>{formatCountdown(countdownMs)}</div>
+            )}
+          </div>
+
+          {!nextEvent && <div style={{ fontSize: "13px", color: "#334155" }}>No more events today.</div>}
+          {nextEvent && renderEventCard(nextEvent, false, true)}
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════
+          FULL SCHEDULE — scrollable list of all events for today
+          ═══════════════════════════════════════════════════════════
+          Collapsible overview so the user can see the whole day at
+          a glance and tap any meal to swap it to Plenny Pro. */}
+      <ScheduleList
+        events={events}
+        currentEvent={currentEvent}
+        plenny={plenny}
+        togglePlenny={togglePlenny}
+        rest={rest}
+      />
+
+      {/* ═══════════════════════════════════════════════════════════
+          FOOTER — macro targets
+          ═══════════════════════════════════════════════════════════ */}
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        borderTop: "1px solid #0d1520", paddingTop: "8px", flexWrap: "wrap", gap: "6px",
+      }}>
+        <div style={{ fontSize: "9px", color: "#1e293b", letterSpacing: "2px" }}>
+          TARGET · ~1500 KCAL · {rest ? "~170P / ~50C / ~65F" : "~170P / ~110C / ~40F"} · 4L WATER
+        </div>
+        <div style={{ fontSize: "9px", color: "#1e293b", letterSpacing: "1px" }}>
+          REST: SUN · THU
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   SCHEDULE LIST COMPONENT
+   ================================================================
+   Shows all events for today in a compact list. Each meal row has
+   a Plenny Pro swap toggle. The currently active event is highlighted. */
+function ScheduleList({ events, currentEvent, plenny, togglePlenny, rest }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div style={{
+      background: "#0d1520", border: "1px solid #1e293b",
+      borderRadius: "6px", overflow: "hidden",
+    }}>
+      {/* Toggle header */}
+      <div
+        className="tap-target"
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          padding: "12px 16px",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}
+      >
+        <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#334155" }}>
+          {rest ? "REST DAY SCHEDULE" : "TODAY'S SCHEDULE"}
+        </div>
+        <div style={{ fontSize: "12px", color: "#475569" }}>{expanded ? "▲" : "▼"}</div>
+      </div>
+
+      {expanded && (
+        <div style={{ padding: "0 16px 12px", display: "flex", flexDirection: "column", gap: "6px" }}>
+          {events.map((ev) => {
+            const c = TYPE_COLORS[ev.type] || "#4ade80";
+            const isCurr = currentEvent?.id === ev.id;
+            const isSwapped = ev.type === "meal" && plenny[ev.id];
+            return (
+              <div key={ev.id} style={{
+                display: "flex", alignItems: "center", gap: "10px",
+                padding: "8px 10px", borderRadius: "4px",
+                background: isCurr ? c + "15" : "transparent",
+                border: isCurr ? `1px solid ${c}33` : "1px solid transparent",
+              }}>
+                {/* Time */}
+                <div style={{
+                  fontSize: "11px", color: isCurr ? c : "#475569",
+                  fontVariantNumeric: "tabular-nums", minWidth: "42px",
+                  fontWeight: isCurr ? "bold" : "normal",
+                }}>{ev.time}</div>
+
+                {/* Colour dot */}
+                <div style={{
+                  width: "6px", height: "6px", borderRadius: "50%",
+                  background: isCurr ? c : c + "66", flexShrink: 0,
+                }}/>
+
+                {/* Label */}
+                <div style={{
+                  flex: 1, fontSize: "12px",
+                  color: isCurr ? "#e2e8f0" : "#64748b",
+                  fontWeight: isCurr ? "bold" : "normal",
+                }}>
+                  {isSwapped ? "PLENNY PRO" : ev.label}
+                  {ev.tag && !isSwapped && (
+                    <span style={{ fontSize: "9px", color: "#334155", marginLeft: "8px" }}>{ev.tag}</span>
+                  )}
+                </div>
+
+                {/* Plenny swap toggle */}
+                {ev.type === "meal" && (
+                  <div
+                    className="tap-target"
+                    onClick={(e) => { e.stopPropagation(); togglePlenny(ev.id); }}
+                    style={{
+                      padding: "4px 8px", borderRadius: "3px",
+                      fontSize: "9px", letterSpacing: "0.5px",
+                      background: isSwapped ? "#fb923c22" : "#1e293b44",
+                      color: isSwapped ? "#fb923c" : "#334155",
+                      border: `1px solid ${isSwapped ? "#fb923c44" : "#1e293b"}`,
+                    }}
+                  >
+                    {isSwapped ? "UNDO" : "⚡PP"}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================
+   MOUNT
+   ================================================================ */
+ReactDOM.createRoot(document.getElementById("root")).render(<Dashboard />);
+</script>
+</body>
+</html>
