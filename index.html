@@ -46,8 +46,10 @@
       dietary fat goes to oxidation, not storage.
    3. No breakfast — morning is reserved for fasted 10K steps (fat oxidation
       at peak during low-intensity fasted cardio). First meal at 08:30+.
-   4. Rest days (Sun/Thu) are auto-detected, not toggleable — prevents the
-      temptation to adjust schedule and lose discipline.
+   4. Rest days default to Sun/Thu (auto-detected). A manual override toggle
+      lets the user switch any day to rest mode (e.g., sailing, travel).
+      The override is date-scoped in localStorage and auto-expires at midnight
+      so it never carries over — you must consciously re-toggle each day.
 
    CALORIE TARGET: ~1500 kcal
    - Aggressive but safe cut for body recomposition / weight loss
@@ -365,9 +367,32 @@ const REST_EVENTS = [
 /* ----------------------------------------------------------------
    HELPER: Rest day detection
    ----------------------------------------------------------------
-   Rest days are Sunday (0) and Thursday (4). This is auto-detected
-   and NOT toggleable — to preserve discipline. */
-const isRestDay = (d) => d.getDay() === 0 || d.getDay() === 4;
+   Rest days default to Sunday (0) and Thursday (4).
+   The user can manually override any day via a toggle.
+   The override is stored with today's date string as key so it
+   auto-expires at midnight — no stale overrides carrying forward. */
+const isAutoRestDay = (d) => d.getDay() === 0 || d.getDay() === 4;
+const todayKey = (d) => `${d.getFullYear()}-${padZ(d.getMonth()+1)}-${padZ(d.getDate())}`;
+
+/* localStorage helpers for rest-day override */
+const loadRestOverride = () => {
+  try {
+    const stored = JSON.parse(localStorage.getItem("nutritimer-rest-override") || "{}");
+    const today = todayKey(new Date());
+    /* Only return the override if it's for today — auto-expire old ones */
+    if (stored.date === today) return stored.value; /* true = forced rest, false = forced workout */
+    return null; /* no override — use auto-detection */
+  } catch { return null; }
+};
+const saveRestOverride = (value) => {
+  try {
+    const today = todayKey(new Date());
+    localStorage.setItem("nutritimer-rest-override", JSON.stringify({ date: today, value }));
+  } catch {}
+};
+const clearRestOverride = () => {
+  try { localStorage.removeItem("nutritimer-rest-override"); } catch {}
+};
 
 /* ----------------------------------------------------------------
    HELPER: Countdown formatter
@@ -410,6 +435,8 @@ function Dashboard() {
   const [preset, setPreset]   = useState(loadPreset);
   /* plenny: { [eventId]: true } — which meals are swapped to Plenny Pro */
   const [plenny, setPlenny]   = useState(loadSwaps);
+  /* restOverride: null (use auto), true (force rest), false (force workout) */
+  const [restOverride, setRestOverride] = useState(loadRestOverride);
 
   /* --- Clock tick every second --- */
   useEffect(() => {
@@ -434,8 +461,30 @@ function Dashboard() {
     });
   }, []);
 
+  /* --- Toggle rest day override ---
+     Tapping the REST/WORKOUT badge cycles through:
+     - If auto-detected as rest day → force to workout day
+     - If auto-detected as workout day → force to rest day
+     - If already overridden → clear override (return to auto)
+     Override is date-scoped — expires at midnight automatically. */
+  const toggleRestDay = useCallback(() => {
+    setRestOverride(prev => {
+      if (prev !== null) {
+        /* Already overridden — clear it, return to auto */
+        clearRestOverride();
+        return null;
+      }
+      /* No override — toggle opposite of auto-detection */
+      const forced = !isAutoRestDay(new Date());
+      saveRestOverride(forced);
+      return forced;
+    });
+  }, []);
+
   /* --- Derived state --- */
-  const rest   = isRestDay(now);
+  const autoRest = isAutoRestDay(now);
+  const rest     = restOverride !== null ? restOverride : autoRest;
+  const isOverridden = restOverride !== null;
   const events = rest ? REST_EVENTS : PRESETS[preset].events;
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
@@ -589,15 +638,28 @@ function Dashboard() {
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{
-            display: "inline-block", padding: "5px 16px", borderRadius: "3px",
-            fontSize: "12px", fontWeight: "bold", letterSpacing: "3px",
-            background: rest ? "#1a2a3a" : "#0f2a1a",
-            color: rest ? "#60a5fa" : "#4ade80",
-            border: `1px solid ${rest ? "#1e3a5f" : "#1a4a2a"}`,
-          }}>{rest ? "REST DAY" : "WORKOUT DAY"}</div>
+          {/* Tappable badge — toggles rest day override.
+              Shows a small "override" indicator when manually toggled. */}
+          <div
+            className="tap-target"
+            onClick={toggleRestDay}
+            style={{
+              display: "inline-block", padding: "5px 16px", borderRadius: "3px",
+              fontSize: "12px", fontWeight: "bold", letterSpacing: "3px",
+              background: rest ? "#1a2a3a" : "#0f2a1a",
+              color: rest ? "#60a5fa" : "#4ade80",
+              border: `1px solid ${rest ? "#1e3a5f" : "#1a4a2a"}`,
+              transition: "all 0.2s",
+            }}
+          >
+            {rest ? "REST DAY" : "WORKOUT DAY"}
+            {isOverridden && <span style={{ fontSize: "9px", marginLeft: "6px", opacity: 0.6 }}>✎</span>}
+          </div>
           <div style={{ fontSize: "10px", color: "#334155", marginTop: "4px", letterSpacing: "1px" }}>
-            {rest ? "SUN / THU · LOW CARB · NO GYM" : `GYM ${PRESETS[preset].gymTime}`}
+            {isOverridden
+              ? (rest ? "MANUAL OVERRIDE · TAP TO UNDO" : "MANUAL OVERRIDE · TAP TO UNDO")
+              : (rest ? "SUN / THU · LOW CARB · NO GYM" : `GYM ${PRESETS[preset].gymTime}`)
+            }
           </div>
         </div>
       </div>
