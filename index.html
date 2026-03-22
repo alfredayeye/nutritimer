@@ -22,7 +22,6 @@
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: #080c14; }
   ::-webkit-scrollbar-thumb { background: #1e293b; }
-  /* Touch feedback for interactive elements */
   .tap-target { -webkit-tap-highlight-color: transparent; cursor: pointer; }
   .tap-target:active { opacity: 0.75; }
 </style>
@@ -35,52 +34,92 @@
    ================================================================
    PURPOSE:
    Real-time dashboard that tells the user exactly what to eat and when,
-   based on their workout schedule for the day. All meals are designed
-   around insulin timing and carbohydrate availability for training.
+   based on their workout schedule for the day. Designed for maximum
+   simplicity — ONE protein, ONE carb, ONE green, plus eggs and banana.
+
+   USER PROFILE (as of March 2026):
+   - 30M, 169cm, 75.3kg (down from 80.2kg on Feb 17)
+   - Body fat: ~23.2% → goal 15% (~68kg target weight)
+   - Recomp in progress: muscle +2.3%, fat -2.4% over last quarter
+   - Rate of loss: ~0.8 kg/week target (safe for muscle preservation)
+   - Lean mass flagged "Low" — must protect with high protein + training
 
    CORE PRINCIPLES:
-   1. Carbs BEFORE the gym — at least 1-2 carb meals digested before training.
-      The user has learned the hard way that training on empty glycogen = bad.
-   2. Fat AFTER the gym (or on rest days) — post-workout GLUT4 elevation
-      means fat is partitioned efficiently. On rest days, low insulin means
-      dietary fat goes to oxidation, not storage.
-   3. No breakfast — morning is reserved for fasted 10K steps (fat oxidation
+   1. Carbs BEFORE the gym — red lentil pasta in all pre-gym meals.
+      User learned the hard way that training on empty glycogen = bad.
+   2. Chicken thighs provide BOTH protein (19.5g/100g) AND fat (6.2g/100g)
+      in every meal — no need for separate fat sources or olive oil.
+   3. No breakfast — morning is for fasted 10K steps (fat oxidation
       at peak during low-intensity fasted cardio). First meal at 08:30+.
-   4. Rest days default to Sun/Thu (auto-detected). A manual override toggle
-      lets the user switch any day to rest mode (e.g., sailing, travel).
-      The override is date-scoped in localStorage and auto-expires at midnight
-      so it never carries over — you must consciously re-toggle each day.
+   4. Rest days default to Sun/Thu (auto-detected). Manual override toggle
+      available for days when gym isn't possible (sailing, travel, etc.).
+      Override is date-scoped in localStorage — auto-expires at midnight.
+   5. Post-gym / last meal adds 1 egg for extra fat to hit daily target.
 
-   CALORIE TARGET: ~1500 kcal
-   - Aggressive but safe cut for body recomposition / weight loss
-   - Protein kept high (~170g) to preserve muscle during deficit
-   - Workout days: ~170P / ~110C / ~40F (carbs fuel the session)
-   - Rest days:    ~170P / ~50C  / ~65F (low carb, higher fat for hormones)
+   CALORIE TARGETS (revised for 75.3kg, safe recomp rate):
+   - Workout days: ~1,700 kcal — 174P / 150C / 46F
+   - Rest days:    ~1,370 kcal — 170P /  52C / 55F
+   - Weekly average: ~1,606 kcal/day
+   - TDEE estimated ~2,646 → deficit ~1,040/day → ~0.8 kg/week loss
 
-   FOOD SOURCING: All items available at Tesco Dun Laoghaire, Ireland.
-   - Turkey breast fillets (~€5-7/500g) — lean protein for carb meals
-   - Beef mince 10% fat (~€3-4/500g) — cheaper than 3%, provides needed fat
-     without excess; reduces dependence on added olive oil
-   - Tuna in brine — cheapest lean protein, zero fat conflict with carbs
-   - Bulgur wheat / potato — moderate GI starch, sustained energy
-   - Red lentil pasta — slower-digesting post-workout carb, extra protein
-   - Olive oil (extra virgin) — healthy fats for hormone maintenance
-   - Spinach, broccoli, kimchi — unlimited greens, gut health
+   FOOD SOURCING — Tesco Dun Laoghaire, Ireland (minimal shopping list):
+   ┌──────────────────────────────────────────────────────────────────┐
+   │  ITEM                          │ DEAL              │ WEEKLY     │
+   │  Chicken boneless thighs 420g  │ 3 for €10 CC      │ ~€33.50   │
+   │  Red lentil pasta 250g         │ €1.50/bag          │ ~€4.50    │
+   │  Broccoli                      │ —                  │ ~€3-4     │
+   │  Eggs (dozen)                  │ —                  │ ~€3       │
+   │  Bananas                       │ —                  │ ~€1       │
+   │                                │ TOTAL              │ ~€45-50   │
+   └──────────────────────────────────────────────────────────────────┘
+
+   CHICKEN THIGHS NUTRITION (Tesco Irish boneless skinless, per 100g):
+   134 kcal · 19.5g protein · 6.2g fat (1.8g sat) · 0g carb
+
+   RED LENTIL PASTA NUTRITION (Tesco High Protein fusilli, per 100g cooked):
+   186 kcal · 12.3g protein · 0.7g fat · 31.1g carb · 3.2g fibre
+   (75g dry ≈ 170g cooked. Gluten free. Source of fibre.)
 
    SUPPLEMENT NOTES (bought in-store, not tracked as separate events):
    - ON Pre-Workout (contains 3.4g creatine) — take 30min before gym
    - Creatine 5g standalone — rest days only (pre-workout covers gym days)
-   - Omega-3 (Seven Seas Max Strength) — take with first meal containing fat
+   - Omega-3 (Seven Seas Max Strength) — take with any meal (fat present)
    - ON Electrolyte Powder — sip during gym (~5g carbs, count toward total)
    - Plenny Pro (Jimmy Joy) — 40g protein, 400kcal meal replacement for on-the-go
 
    WORKOUT PRESETS:
-   The user can select when they're training. Meals reorder automatically:
-   - MORNING (08:00): Quick banana pre-gym, then post-workout meal + 3 more
-   - MIDDAY  (14:00): 2 carb meals before gym, post-workout + 1 evening meal
-   - EVENING (18:00): 3 carb meals through the day, post-workout dinner (default)
+   User taps to select gym time. Meals reorder to ensure carb loading:
+   - MORNING (08:00): Banana pre-gym, all pasta meals post-workout
+   - MIDDAY  (14:00): 2 pasta meals before, 1 after, best carb balance
+   - EVENING (18:00): 3 pasta meals before gym, maximum fuel (default)
 
-   The preset selection persists in localStorage so it survives page reloads.
+   WHY CHICKEN THIGHS AS SOLE PROTEIN:
+   - Provides both protein AND fat in one food — no olive oil, no beef, no second protein
+   - 3-for-€10 Clubcard deal on 420g packs — cheapest protein per gram on deal
+   - 6.2g fat/100g is moderate: enough for hormones, not enough to wreck
+     pre-workout gastric emptying (~9g fat in a 150g serving)
+   - Simplest possible plan: user buys ONE protein source
+
+   WHY RED LENTIL PASTA OVER BULGUR/POTATO:
+   - 12.3g protein per 100g cooked — highest protein carb, stacks with chicken
+   - Gluten free, good fibre (3.2g/100g)
+   - €1.50/250g dry bag — cheap and shelf-stable
+   - Lower GI than potato — sustained energy, no crash mid-workout
+
+   MACRO VERIFICATION (workout day):
+   600g chicken: 117P, 37.2F, 0C = 804 kcal
+   340g cooked pasta (~150g dry): 41.8P, 2.4F, 105.7C = 632 kcal
+   250g broccoli: 7.3P, 0.9F, 17.5C = 85 kcal
+   1 banana: 1.3P, 0.4F, 27C = 105 kcal
+   1 egg: 6.3P, 4.8F, 0.4C = 72 kcal
+   TOTAL: 173.7P, 45.7F, 150.6C = ~1,698 kcal ✓
+
+   MACRO VERIFICATION (rest day):
+   700g chicken: 136.5P, 43.4F, 0C = 938 kcal
+   100g cooked pasta (~44g dry): 12.3P, 0.7F, 31.1C = 186 kcal
+   300g broccoli: 8.8P, 1.0F, 21C = 102 kcal
+   2 eggs: 12.6P, 9.6F, 0.8C = 144 kcal
+   TOTAL: 170.2P, 54.7F, 52.9C = ~1,370 kcal ✓
    ================================================================ */
 
 const { useState, useEffect, useCallback } = React;
@@ -93,18 +132,16 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 const padZ = (n) => String(n).padStart(2, "0");
 const toMin = (t) => { const [h,m] = t.split(":").map(Number); return h * 60 + m; };
 
-/* Timeline boundaries — 06:00 to 23:00 */
 const DAY_START = 6 * 60;
 const DAY_END   = 23 * 60;
 
-/* Colour coding by event type */
 const TYPE_COLORS = {
-  meal:       "#4ade80",  /* green  — food */
-  fuel:       "#fb923c",  /* orange — quick pre-gym fuel */
-  gym:        "#60a5fa",  /* blue   — training */
+  meal: "#4ade80",
+  fuel: "#fb923c",
+  gym:  "#60a5fa",
 };
 
-/* Plenny Pro replacement — used when user taps "swap" on any meal */
+/* Plenny Pro — swaps any meal when user taps the button */
 const PLENNY_PRO = {
   label: "PLENNY PRO",
   tag: "MEAL REPLACEMENT",
@@ -116,178 +153,114 @@ const PLENNY_PRO = {
 /* ----------------------------------------------------------------
    MEAL TEMPLATES
    ----------------------------------------------------------------
-   Each meal is a template that gets slotted into different time
-   positions depending on the workout preset. The `role` field
-   determines where it can be placed:
-   - "carb"     : carb + lean protein, placed BEFORE gym
-   - "pre-gym"  : carb + protein, must be the last meal before gym
-   - "post-gym" : carb + protein + fat, placed immediately AFTER gym
-   - "fat"      : fat + protein, no carbs, placed after gym / rest days
-   - "fuel"     : quick pre-gym carbs (morning gym only)
+   Every meal is built from the same 5 ingredients:
+   chicken thighs, red lentil pasta, broccoli, eggs, banana.
 
-   On REST DAYS, a separate set of meals is used — only the first
-   meal contains carbs, the rest are fat+protein.
+   Meals differ only in whether they include pasta (carb meals)
+   and/or egg (fat-boosting meals). This is the simplicity:
+   one protein source, one carb source, one green.
+
+   The `id` field must be unique across all events in a preset
+   so that Plenny Pro swaps work correctly per-meal.
    ---------------------------------------------------------------- */
 
-/* === WORKOUT DAY MEAL COMPONENTS ===
-   These are assembled into schedules by each preset below. */
+/* Carb + Protein meal — chicken + pasta + broccoli.
+   Used in pre-gym slots where glycogen loading matters.
+   ~113g cooked pasta per meal (≈50g dry) when split across 3 meals,
+   or ~170g cooked (≈75g dry) when split across 2 meals. */
+const MEAL_CARB = {
+  id: "carb", label: "MEAL", type: "meal",
+  tag: "CARB + PROTEIN",
+  items: [
+    "150g chicken boneless thighs",
+    "~115g cooked red lentil pasta (~50g dry)",
+    "Broccoli — unlimited",
+  ],
+  note: "Chicken provides 29.3g protein + 9.3g fat naturally. Lentil pasta adds 14.1g protein and 35.8g carbs. Combined: 43.4g protein per meal. Fat from chicken is moderate enough (~9g) to not slow gastric emptying significantly.",
+  supplements: [],
+};
 
+/* Pre-gym carb meal — same as MEAL_CARB but with banana for fast-acting glucose.
+   Must be eaten 1.5+ hours before gym for digestion. The banana peaks ~30min,
+   the pasta sustains through the session. */
+const MEAL_PRE_GYM = {
+  id: "pre-gym", label: "MEAL", type: "meal",
+  tag: "PRE-GYM · CARB + PROTEIN",
+  items: [
+    "150g chicken boneless thighs",
+    "~110g cooked red lentil pasta (~48g dry)",
+    "1 banana",
+    "Broccoli — unlimited",
+  ],
+  note: "Two-wave carb delivery: banana peaks ~30min for fast glucose, lentil pasta sustains through the session. Take your pre-workout 30min before gym. Do NOT skip the pasta — this is what fuels the workout.",
+  supplements: ["ON Pre-Workout — 30min before gym"],
+};
+
+/* No-carb meal — chicken + broccoli only.
+   Used in post-gym or late-day slots where low insulin is preferred.
+   On workout days, chicken's built-in fat (6.2g/100g) covers fat needs
+   without adding external fat sources. */
+const MEAL_NOCARB = {
+  id: "nocarb", label: "MEAL", type: "meal",
+  tag: "PROTEIN + FAT · NO CARBS",
+  items: [
+    "150g chicken boneless thighs",
+    "Broccoli — unlimited",
+  ],
+  note: "No carbs = low insulin = fat oxidation mode. Chicken's 6.2g fat per 100g provides fat naturally — no olive oil needed. Simple.",
+  supplements: [],
+};
+
+/* Last meal of the day — chicken + egg + broccoli.
+   The egg adds 4.8g fat to push daily fat total above the 40g hormone floor.
+   Placed as the final meal for slow overnight protein delivery. */
+const MEAL_LAST = {
+  id: "last", label: "MEAL", type: "meal",
+  tag: "PROTEIN + FAT · LAST MEAL",
+  items: [
+    "150g chicken boneless thighs",
+    "1 whole egg",
+    "Broccoli — unlimited",
+  ],
+  note: "Egg adds 6.3g protein + 4.8g fat to push daily fat above the 40g hormone floor. Low insulin going into sleep maximises overnight GH release and fat oxidation. Chicken + egg = slow-digesting protein feeds muscles overnight.",
+  supplements: ["Omega-3 — 1 capsule (fat present aids absorption)"],
+};
+
+/* Pre-gym fuel — banana only. Used for morning gym when there's no time
+   for a full meal. NOT a real meal — just quick glucose. */
 const MEAL_FUEL = {
   id: "fuel", label: "PRE-GYM FUEL", type: "fuel",
   tag: "FAST CARBS",
   items: [
     "1 banana",
-    "30g whey protein in water",
   ],
-  note: "Minimal digestion time needed — banana glucose peaks in ~20min, whey absorbs in ~30min. This is NOT a full meal. Take your pre-workout 30min before the session. Morning gym means no fasted walk today — the gym IS the exercise.",
+  note: "Minimal digestion time — banana glucose peaks in ~20min. This is NOT a full meal. Take your pre-workout at 07:30. Morning gym means no fasted walk today — the gym IS the exercise.",
   supplements: ["ON Pre-Workout — take at 07:30"],
 };
 
-const MEAL_CARB_A = {
-  id: "carb-a", label: "MEAL", type: "meal",
-  tag: "CARB + PROTEIN",
+/* Gym event — same across all presets, just different time slots */
+const makeGym = (carbMeals) => ({
+  type: "gym", id: "gym", label: "GYM", tag: "TRAINING",
   items: [
-    "150g turkey breast",
-    "100g cooked bulgur wheat",
-    "Spinach — unlimited",
+    "Resistance training session",
+    "Sip ON Electrolytes throughout (~5g carbs)",
   ],
-  note: "Lean protein + moderate-GI starch. Zero added fat keeps insulin response clean for carb partitioning into muscle glycogen. Take omega-3 capsule with a later meal that contains fat.",
-  supplements: [],
-};
-
-const MEAL_CARB_B = {
-  id: "carb-b", label: "MEAL", type: "meal",
-  tag: "CARB + LEAN PROTEIN",
-  items: [
-    "130g tuna in brine",
-    "100g cooked bulgur wheat",
-    "Broccoli — unlimited",
-    "Kimchi — add freely",
-  ],
-  note: "Tuna is the leanest protein option — zero fat conflict with carbs. Kimchi supports gut health and insulin sensitivity over time. Broccoli is unlimited fibre.",
-  supplements: [],
-};
-
-const MEAL_PRE_GYM = {
-  id: "pre-gym", label: "MEAL", type: "meal",
-  tag: "PRE-GYM · CARB + PROTEIN",
-  items: [
-    "150g turkey breast",
-    "1 banana",
-    "100g cooked bulgur OR potato",
-    "Spinach — unlimited",
-  ],
-  note: "Two-wave carb delivery: banana peaks ~30min for gym start, bulgur/potato sustains through the session. Zero fat — fastest gastric emptying. Do NOT skip the starch — this is what fuels the workout. Take pre-workout 30min before gym.",
-  supplements: ["ON Pre-Workout — 30min before gym"],
-};
-
-const MEAL_POST_GYM = {
-  id: "post-gym", label: "MEAL", type: "meal",
-  tag: "POST-WORKOUT · CARB + PROTEIN + FAT",
-  items: [
-    "150g beef mince (10% fat)",
-    "75g cooked red lentil pasta",
-    "15ml extra virgin olive oil",
-    "Broccoli — unlimited",
-    "Kimchi — add freely",
-  ],
-  note: "Post-workout GLUT4 elevation means fat is efficiently partitioned — beef mince and olive oil close the daily fat target cleanly. 10% mince is cheaper than 3% and provides needed fat naturally, reducing olive oil dependence. Lentil pasta is slower-digesting — ideal post-workout recovery. Take creatine now if it's a gym day (pre-workout already has it, but extra 5g with this insulin spike aids muscle uptake). Take omega-3 here — fat present aids absorption.",
-  supplements: [
-    "Omega-3 — 1 capsule (Seven Seas Max Strength)",
-  ],
-};
-
-const MEAL_FAT_A = {
-  id: "fat-a", label: "MEAL", type: "meal",
-  tag: "FAT + PROTEIN · NO CARBS",
-  items: [
-    "130g tuna in brine",
-    "15ml extra virgin olive oil",
-    "Broccoli — unlimited",
-    "Spinach — unlimited",
-  ],
-  note: "No carbs = no insulin spike = dietary fat goes to oxidation, not storage. Tuna provides lean protein, olive oil provides essential fats for hormone maintenance. Keep it simple.",
-  supplements: [],
-};
-
-const MEAL_FAT_B = {
-  id: "fat-b", label: "MEAL", type: "meal",
-  tag: "FAT + PROTEIN · NO CARBS",
-  items: [
-    "150g turkey breast",
-    "15ml extra virgin olive oil",
-    "Spinach — unlimited",
-    "Cucumber or greens",
-  ],
-  note: "Low insulin going into the evening. Turkey provides slow-digesting protein to feed muscles overnight. Olive oil adds final fat contribution.",
-  supplements: [],
-};
-
-/* === REST DAY MEALS ===
-   Only the first meal has carbs. The rest are fat+protein to keep
-   insulin low and maximise fat oxidation for the remaining 12+ hours.
-   Auto-triggered on Sunday and Thursday. */
-
-const REST_MEAL_1 = {
-  id: "rest-1", label: "MEAL 1", type: "meal",
-  tag: "LAST CARB MEAL TODAY",
-  items: [
-    "150g turkey breast",
-    "100g cooked bulgur wheat",
-    "Spinach — unlimited",
-  ],
-  note: "Last starch of the day. No carbs after this on rest days — afternoon insulin stays low, maximising fat oxidation for the remaining 12+ hours.",
-  supplements: ["Omega-3 — 1 capsule (with a later meal containing fat)"],
-};
-
-const REST_MEAL_2 = {
-  id: "rest-2", label: "MEAL 2", type: "meal",
-  tag: "NO CARBS",
-  items: [
-    "150g turkey breast",
-    "2 whole eggs",
-    "Spinach — unlimited",
-    "Broccoli — unlimited",
-  ],
-  note: "Eggs belong here — fat + protein with zero carbs means no insulin spike to drive fat storage. This is the correct slot for whole eggs on rest days.",
-  supplements: [],
-};
-
-const REST_MEAL_3 = {
-  id: "rest-3", label: "MEAL 3", type: "meal",
-  tag: "NO CARBS",
-  items: [
-    "150g beef mince (10% fat)",
-    "20ml extra virgin olive oil",
-    "Broccoli — unlimited",
-    "Spinach — unlimited",
-  ],
-  note: "Beef mince and olive oil close the rest-day fat target. No carbs present — no insulin to shuttle dietary fat into storage. Fat goes to oxidation and hormone maintenance.",
-  supplements: ["Creatine 5g standalone — rest day maintenance dose"],
-};
-
-const REST_MEAL_4 = {
-  id: "rest-4", label: "MEAL 4", type: "meal",
-  tag: "NO CARBS",
-  items: [
-    "130g tuna in brine",
-    "15ml extra virgin olive oil",
-    "Cucumber or greens",
-  ],
-  note: "Low insulin going into sleep. Tuna provides slow-digesting protein to feed muscles overnight. Olive oil adds final fat contribution. Maximises overnight GH release and fat oxidation.",
-  supplements: [],
-};
+  note: `${carbMeals} carb meal${carbMeals !== 1 ? 's' : ''} digested — glycogen ${carbMeals >= 2 ? 'is loaded' : 'from last night + banana fuel'}. Catecholamines suppress insulin ~40-60%, GLUT4 drives glucose uptake independently.`,
+  supplements: ["ON Electrolyte Powder — sip throughout"],
+});
 
 /* ----------------------------------------------------------------
    WORKOUT PRESETS
    ----------------------------------------------------------------
-   Each preset defines the full schedule of events for a workout day.
-   The meals are ordered to ensure sufficient carb loading before the
-   gym session. The `time` and `endTime` fields set the timeline
-   positions and eating windows.
+   Each preset arranges the same food across different time slots
+   depending on when the gym session happens. The KEY CONSTRAINT:
+   carb (pasta) meals go BEFORE the gym for glycogen loading.
+   Post-gym / evening meals are no-carb (chicken + broccoli only).
 
-   KEY RULE: At least 1.5 hours between last carb meal end and gym
-   start, to allow gastric emptying and glucose absorption.
+   All presets total ~600g chicken, ~340g cooked pasta, ~250g broccoli,
+   1 banana, 1 egg = ~1,700 kcal.
+
+   The egg always goes in the LAST meal of the day.
    ---------------------------------------------------------------- */
 
 const PRESETS = {
@@ -295,21 +268,21 @@ const PRESETS = {
     id: "morning",
     label: "MORNING",
     gymTime: "08:00",
-    desc: "Gym at 08:00 · Quick fuel only · No fasted walk today",
-    /* Morning is the toughest for carb loading — only a banana + whey
-       before the session. The post-workout meal is the big carb hit.
-       Remaining meals taper from carb to fat through the day. */
+    desc: "Gym at 08:00 · Banana only pre-gym · No fasted walk",
+    /* Morning is the toughest for carb loading — only a banana before
+       the session. All 3 pasta meals come AFTER the gym for recovery
+       and restocking glycogen for the next day. The tradeoff: less fuel
+       for this session, but the workout still works with overnight
+       glycogen + banana. Best for lighter training days. */
     events: [
-      { ...MEAL_FUEL,     time: "06:30", endTime: "07:30" },
-      { type: "gym", id: "gym", label: "GYM", tag: "TRAINING", time: "08:00", endTime: "09:30",
-        items: ["Resistance training session", "Sip ON Electrolytes throughout (~5g carbs)"],
-        note: "Morning session — glycogen from last night's dinner + banana fuel. Expect solid performance for compound lifts. Catecholamines suppress insulin ~40-60%, GLUT4 drives glucose uptake independently. Electrolyte drink sustains mid-session.",
-        supplements: ["ON Electrolyte Powder — sip throughout"],
-      },
-      { ...MEAL_POST_GYM, time: "10:00", endTime: "13:00", label: "MEAL 1" },
-      { ...MEAL_CARB_A,   time: "13:00", endTime: "16:30", label: "MEAL 2" },
-      { ...MEAL_FAT_A,    time: "16:30", endTime: "20:00", label: "MEAL 3" },
-      { ...MEAL_FAT_B,    time: "20:00", endTime: "22:30", label: "MEAL 4" },
+      { ...MEAL_FUEL, time: "06:30", endTime: "07:30" },
+      { ...makeGym(0), time: "08:00", endTime: "09:30" },
+      { ...MEAL_CARB,    time: "10:00", endTime: "13:00", id: "carb-1", label: "MEAL 1",
+        tag: "POST-WORKOUT · CARB + PROTEIN",
+        note: "Post-workout GLUT4 elevation — carbs shuttle straight to muscle glycogen. This is your biggest meal. Eat all the broccoli you want." },
+      { ...MEAL_CARB,    time: "13:00", endTime: "16:30", id: "carb-2", label: "MEAL 2" },
+      { ...MEAL_NOCARB,  time: "16:30", endTime: "20:00", id: "nocarb-3", label: "MEAL 3" },
+      { ...MEAL_LAST,    time: "20:00", endTime: "22:30", label: "MEAL 4" },
     ],
   },
 
@@ -318,19 +291,17 @@ const PRESETS = {
     label: "MIDDAY",
     gymTime: "14:00",
     desc: "Gym at 14:00 · 2 carb meals before · Best balance",
-    /* Midday is the sweet spot — two full carb meals digested before
-       the session. Post-workout carb+fat meal, then a light fat+protein
-       dinner. Good carb availability without the late-night eating. */
+    /* Midday is the sweet spot — two full pasta meals digested before
+       the session. One more pasta meal post-workout for recovery.
+       Last meal is chicken + egg, no carbs. */
     events: [
-      { ...MEAL_CARB_A,   time: "08:30", endTime: "12:00", label: "MEAL 1" },
-      { ...MEAL_PRE_GYM,  time: "12:00", endTime: "13:30", label: "MEAL 2" },
-      { type: "gym", id: "gym", label: "GYM", tag: "TRAINING", time: "14:00", endTime: "15:30",
-        items: ["Resistance training session", "Sip ON Electrolytes throughout (~5g carbs)"],
-        note: "Two carb meals digested — glycogen is loaded. Peak performance window. Catecholamines suppress insulin ~40-60%, GLUT4 drives glucose uptake independently.",
-        supplements: ["ON Electrolyte Powder — sip throughout"],
-      },
-      { ...MEAL_POST_GYM, time: "16:00", endTime: "20:00", label: "MEAL 3" },
-      { ...MEAL_FAT_A,    time: "20:00", endTime: "22:30", label: "MEAL 4" },
+      { ...MEAL_CARB,    time: "08:30", endTime: "12:00", id: "carb-1", label: "MEAL 1" },
+      { ...MEAL_PRE_GYM, time: "12:00", endTime: "13:30", label: "MEAL 2" },
+      { ...makeGym(2), time: "14:00", endTime: "15:30" },
+      { ...MEAL_CARB,    time: "16:00", endTime: "20:00", id: "carb-3", label: "MEAL 3",
+        tag: "POST-WORKOUT · CARB + PROTEIN",
+        note: "Post-workout GLUT4 elevation — carbs go straight to muscle glycogen recovery. Lentil pasta's slower digestion is ideal here, no urgency." },
+      { ...MEAL_LAST,    time: "20:00", endTime: "22:30", label: "MEAL 4" },
     ],
   },
 
@@ -339,55 +310,105 @@ const PRESETS = {
     label: "EVENING",
     gymTime: "18:00",
     desc: "Gym at 18:00 · 3 carb meals · Maximum fuel · Default",
-    /* Evening is the original plan and the default — three carb meals
-       throughout the day means glycogen is fully stocked. The tradeoff
-       is a late post-workout dinner at 20:30. */
+    /* Evening is the default and highest-performance option — three pasta
+       meals throughout the day means glycogen is fully stocked. The tradeoff
+       is a late post-workout dinner at 20:30 with no carbs. */
     events: [
-      { ...MEAL_CARB_A,   time: "08:30", endTime: "12:30", label: "MEAL 1" },
-      { ...MEAL_CARB_B,   time: "12:30", endTime: "16:30", label: "MEAL 2" },
-      { ...MEAL_PRE_GYM,  time: "16:30", endTime: "17:30", label: "MEAL 3" },
-      { type: "gym", id: "gym", label: "GYM", tag: "TRAINING", time: "18:00", endTime: "19:30",
-        items: ["Resistance training session", "Sip ON Electrolytes throughout (~5g carbs)"],
-        note: "Three carb meals digested — maximum glycogen. This is the highest-performance option. Catecholamines suppress insulin ~40-60%, GLUT4 drives glucose uptake independently. Prime fat-burn window.",
-        supplements: ["ON Electrolyte Powder — sip throughout"],
-      },
-      { ...MEAL_POST_GYM, time: "20:30", endTime: "22:30", label: "MEAL 4" },
+      { ...MEAL_CARB,    time: "08:30", endTime: "12:30", id: "carb-1", label: "MEAL 1" },
+      { ...MEAL_CARB,    time: "12:30", endTime: "16:30", id: "carb-2", label: "MEAL 2" },
+      { ...MEAL_PRE_GYM, time: "16:30", endTime: "17:30", label: "MEAL 3" },
+      { ...makeGym(3), time: "18:00", endTime: "19:30" },
+      { ...MEAL_LAST,    time: "20:30", endTime: "22:30", label: "MEAL 4",
+        tag: "POST-WORKOUT · PROTEIN + FAT",
+        note: "Post-workout GLUT4 still elevated. Chicken + egg provides protein for recovery. The egg's 4.8g fat pushes daily total above the 40g hormone floor. No carbs — you've had 150g already today. Sleep by 22:30 for GH release." },
     ],
   },
 };
 
-/* Rest day schedule — same regardless of preset */
+/* ----------------------------------------------------------------
+   REST DAY MEALS
+   ----------------------------------------------------------------
+   Only the FIRST meal includes pasta (small portion: ~100g cooked /
+   ~44g dry). Remaining meals are chicken + broccoli +/- eggs.
+   This keeps insulin low for 12+ hours, maximising fat oxidation
+   on the days you're not training.
+
+   Total: 700g chicken, 100g cooked pasta, 300g broccoli, 2 eggs
+   = ~1,370 kcal · 170P / 55F / 52C
+
+   Auto-triggered on Sunday (0) and Thursday (4).
+   Can be manually overridden via the tappable day-type badge.
+   ---------------------------------------------------------------- */
 const REST_EVENTS = [
-  { ...REST_MEAL_1, time: "08:30", endTime: "12:30" },
-  { ...REST_MEAL_2, time: "12:30", endTime: "16:30" },
-  { ...REST_MEAL_3, time: "16:30", endTime: "20:30" },
-  { ...REST_MEAL_4, time: "20:30", endTime: "22:30" },
+  {
+    id: "rest-1", label: "MEAL 1", type: "meal",
+    tag: "LAST CARB MEAL TODAY",
+    time: "08:30", endTime: "12:30",
+    items: [
+      "175g chicken boneless thighs",
+      "100g cooked red lentil pasta (~44g dry)",
+      "Broccoli — unlimited",
+    ],
+    note: "Last starch of the day. Only ~31g carbs — just enough to keep thyroid and metabolism responsive. No carbs after this on rest days. Afternoon insulin stays low, maximising fat oxidation for 12+ hours.",
+    supplements: [],
+  },
+  {
+    id: "rest-2", label: "MEAL 2", type: "meal",
+    tag: "NO CARBS",
+    time: "12:30", endTime: "16:30",
+    items: [
+      "175g chicken boneless thighs",
+      "1 whole egg",
+      "Broccoli — unlimited",
+    ],
+    note: "Egg adds extra fat here — with no carbs present, there's no insulin spike to shuttle fat into storage. Fat goes to oxidation and hormone maintenance. Chicken + egg = 40g protein.",
+    supplements: ["Omega-3 — 1 capsule (fat present aids absorption)"],
+  },
+  {
+    id: "rest-3", label: "MEAL 3", type: "meal",
+    tag: "NO CARBS",
+    time: "16:30", endTime: "20:30",
+    items: [
+      "175g chicken boneless thighs",
+      "Broccoli — unlimited",
+    ],
+    note: "Simple. Chicken and broccoli. Fat oxidation continues. Stay hydrated.",
+    supplements: ["Creatine 5g standalone — rest day maintenance dose"],
+  },
+  {
+    id: "rest-4", label: "MEAL 4", type: "meal",
+    tag: "NO CARBS · LAST MEAL",
+    time: "20:30", endTime: "22:30",
+    items: [
+      "175g chicken boneless thighs",
+      "1 whole egg",
+      "Broccoli — unlimited",
+    ],
+    note: "Low insulin going into sleep. Chicken provides slow-digesting protein for overnight muscle repair. Egg adds final fat contribution. Maximises overnight GH release and fat oxidation. Sleep by 22:30.",
+    supplements: [],
+  },
 ];
 
 /* ----------------------------------------------------------------
-   HELPER: Rest day detection
+   REST DAY DETECTION + OVERRIDE
    ----------------------------------------------------------------
-   Rest days default to Sunday (0) and Thursday (4).
-   The user can manually override any day via a toggle.
-   The override is stored with today's date string as key so it
-   auto-expires at midnight — no stale overrides carrying forward. */
+   Auto: Sunday (0) and Thursday (4).
+   Override: tappable badge stores today's date in localStorage.
+   Auto-expires at midnight — no stale overrides carrying forward.
+   ---------------------------------------------------------------- */
 const isAutoRestDay = (d) => d.getDay() === 0 || d.getDay() === 4;
 const todayKey = (d) => `${d.getFullYear()}-${padZ(d.getMonth()+1)}-${padZ(d.getDate())}`;
 
-/* localStorage helpers for rest-day override */
 const loadRestOverride = () => {
   try {
     const stored = JSON.parse(localStorage.getItem("nutritimer-rest-override") || "{}");
-    const today = todayKey(new Date());
-    /* Only return the override if it's for today — auto-expire old ones */
-    if (stored.date === today) return stored.value; /* true = forced rest, false = forced workout */
-    return null; /* no override — use auto-detection */
+    if (stored.date === todayKey(new Date())) return stored.value;
+    return null;
   } catch { return null; }
 };
 const saveRestOverride = (value) => {
   try {
-    const today = todayKey(new Date());
-    localStorage.setItem("nutritimer-rest-override", JSON.stringify({ date: today, value }));
+    localStorage.setItem("nutritimer-rest-override", JSON.stringify({ date: todayKey(new Date()), value }));
   } catch {}
 };
 const clearRestOverride = () => {
@@ -395,7 +416,7 @@ const clearRestOverride = () => {
 };
 
 /* ----------------------------------------------------------------
-   HELPER: Countdown formatter
+   HELPERS
    ---------------------------------------------------------------- */
 const formatCountdown = (diffMs) => {
   if (diffMs <= 0) return "NOW";
@@ -408,9 +429,6 @@ const formatCountdown = (diffMs) => {
   return `${s}s`;
 };
 
-/* ----------------------------------------------------------------
-   HELPER: localStorage with fallback
-   ---------------------------------------------------------------- */
 const loadPreset = () => {
   try { return localStorage.getItem("nutritimer-preset") || "evening"; }
   catch { return "evening"; }
@@ -430,27 +448,21 @@ const saveSwaps = (v) => {
    MAIN DASHBOARD COMPONENT
    ================================================================ */
 function Dashboard() {
-  /* --- State --- */
   const [now, setNow]         = useState(new Date());
   const [preset, setPreset]   = useState(loadPreset);
-  /* plenny: { [eventId]: true } — which meals are swapped to Plenny Pro */
   const [plenny, setPlenny]   = useState(loadSwaps);
-  /* restOverride: null (use auto), true (force rest), false (force workout) */
   const [restOverride, setRestOverride] = useState(loadRestOverride);
 
-  /* --- Clock tick every second --- */
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  /* --- Persist preset selection --- */
   const selectPreset = useCallback((p) => {
     setPreset(p);
     savePreset(p);
   }, []);
 
-  /* --- Toggle Plenny Pro swap for a meal --- */
   const togglePlenny = useCallback((eventId) => {
     setPlenny(prev => {
       const next = { ...prev };
@@ -461,20 +473,12 @@ function Dashboard() {
     });
   }, []);
 
-  /* --- Toggle rest day override ---
-     Tapping the REST/WORKOUT badge cycles through:
-     - If auto-detected as rest day → force to workout day
-     - If auto-detected as workout day → force to rest day
-     - If already overridden → clear override (return to auto)
-     Override is date-scoped — expires at midnight automatically. */
   const toggleRestDay = useCallback(() => {
     setRestOverride(prev => {
       if (prev !== null) {
-        /* Already overridden — clear it, return to auto */
         clearRestOverride();
         return null;
       }
-      /* No override — toggle opposite of auto-detection */
       const forced = !isAutoRestDay(new Date());
       saveRestOverride(forced);
       return forced;
@@ -488,7 +492,6 @@ function Dashboard() {
   const events = rest ? REST_EVENTS : PRESETS[preset].events;
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
-  /* Find current and next events */
   let currentEvent = null, nextEvent = null;
   for (let i = 0; i < events.length; i++) {
     const s = toMin(events[i].time);
@@ -506,7 +509,6 @@ function Dashboard() {
   const allDone   = !currentEvent && !nextEvent && nowMin >= toMin(events[events.length - 1].endTime);
   const beforeDay = !currentEvent && !nextEvent && nowMin < toMin(events[0].time);
 
-  /* Countdown to next event */
   let countdownMs = null;
   if (nextEvent) {
     const midnight = new Date(now);
@@ -514,20 +516,16 @@ function Dashboard() {
     countdownMs = midnight.getTime() + toMin(nextEvent.time) * 60000 - now.getTime();
   }
 
-  /* Timeline position (0-100%) */
   const timelinePct = Math.min(100, Math.max(0, ((nowMin - DAY_START) / (DAY_END - DAY_START)) * 100));
   const hourTicks = [6, 8, 10, 12, 14, 16, 18, 20, 22];
 
-  /* Clock display */
   const hh = padZ(now.getHours());
   const mm = padZ(now.getMinutes());
   const ss = padZ(now.getSeconds());
 
   /* ----------------------------------------------------------------
-     RENDER HELPERS
+     RENDER: Event card (used for both "current" and "next" panels)
      ---------------------------------------------------------------- */
-
-  /* Render a single meal/event card */
   const renderEventCard = (ev, isCurrent, dimmed) => {
     if (!ev) return null;
     const c = TYPE_COLORS[ev.type] || "#4ade80";
@@ -536,7 +534,6 @@ function Dashboard() {
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        {/* Header */}
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
             {isCurrent && (
@@ -555,7 +552,6 @@ function Dashboard() {
           )}
         </div>
 
-        {/* Items */}
         <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
           {display.items.map((item, i) => (
             <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
@@ -565,7 +561,6 @@ function Dashboard() {
           ))}
         </div>
 
-        {/* Supplements */}
         {display.supplements && display.supplements.length > 0 && (
           <div style={{
             background: "#facc1511", border: "1px solid #facc1533",
@@ -578,17 +573,14 @@ function Dashboard() {
           </div>
         )}
 
-        {/* Note */}
         <div style={{ fontSize: "11px", color: dimmed ? "#334155" : "#475569", lineHeight: "1.5", borderTop: "1px solid #1e293b", paddingTop: "10px" }}>
           {display.note}
         </div>
 
-        {/* Time window */}
         <div style={{ fontSize: "10px", color: "#334155" }}>
           Window: {ev.time} – {ev.endTime}
         </div>
 
-        {/* Plenny Pro swap button — only for meal-type events */}
         {ev.type === "meal" && (
           <div
             className="tap-target"
@@ -621,9 +613,7 @@ function Dashboard() {
       color: "#e2e8f0", gap: "14px", maxWidth: "900px", margin: "0 auto",
     }}>
 
-      {/* ═══════════════════════════════════════════════════════════
-          TOP BAR — Clock, date, day type badge
-          ═══════════════════════════════════════════════════════════ */}
+      {/* ═══ TOP BAR ═══ */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
         <div>
           <div style={{
@@ -638,8 +628,6 @@ function Dashboard() {
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          {/* Tappable badge — toggles rest day override.
-              Shows a small "override" indicator when manually toggled. */}
           <div
             className="tap-target"
             onClick={toggleRestDay}
@@ -657,19 +645,14 @@ function Dashboard() {
           </div>
           <div style={{ fontSize: "10px", color: "#334155", marginTop: "4px", letterSpacing: "1px" }}>
             {isOverridden
-              ? (rest ? "MANUAL OVERRIDE · TAP TO UNDO" : "MANUAL OVERRIDE · TAP TO UNDO")
+              ? "MANUAL OVERRIDE · TAP TO UNDO"
               : (rest ? "SUN / THU · LOW CARB · NO GYM" : `GYM ${PRESETS[preset].gymTime}`)
             }
           </div>
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════
-          WORKOUT PRESET SELECTOR — only shown on workout days
-          ═══════════════════════════════════════════════════════════
-          Three tap-able buttons that change when the gym session is.
-          The entire meal schedule rearranges based on selection.
-          Selection persists in localStorage. */}
+      {/* ═══ WORKOUT PRESET SELECTOR ═══ */}
       {!rest && (
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           {Object.values(PRESETS).map((p) => {
@@ -702,11 +685,7 @@ function Dashboard() {
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════
-          TIMELINE BAR
-          ═══════════════════════════════════════════════════════════
-          Visual representation of the day from 06:00 to 23:00.
-          Each event is a coloured block, a white line marks "now". */}
+      {/* ═══ TIMELINE BAR ═══ */}
       <div style={{ userSelect: "none" }}>
         <div style={{
           position: "relative", height: "38px",
@@ -742,7 +721,6 @@ function Dashboard() {
               </div>
             );
           })}
-          {/* Now indicator */}
           {timelinePct >= 0 && timelinePct <= 100 && (
             <div style={{
               position: "absolute", left: `${timelinePct}%`,
@@ -759,7 +737,6 @@ function Dashboard() {
             </div>
           )}
         </div>
-        {/* Hour labels */}
         <div style={{ position: "relative", height: "16px", marginTop: "2px" }}>
           {hourTicks.map(h => {
             const left = ((h * 60 - DAY_START) / (DAY_END - DAY_START)) * 100;
@@ -774,18 +751,9 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════
-          MAIN PANELS — Current event (left) + Next event (right)
-          ═══════════════════════════════════════════════════════════
-          On mobile these stack vertically (flex-wrap).
-          Each panel shows the full meal details, items, supplements,
-          notes, and the Plenny Pro swap button. */}
-      <div style={{
-        display: "flex", gap: "14px", flex: 1,
-        flexWrap: "wrap",
-      }}>
-
-        {/* --- CURRENT EVENT PANEL --- */}
+      {/* ═══ MAIN PANELS ═══ */}
+      <div style={{ display: "flex", gap: "14px", flex: 1, flexWrap: "wrap" }}>
+        {/* Current event */}
         <div style={{
           flex: "1 1 320px", minWidth: "280px",
           background: "#0d1520",
@@ -794,11 +762,10 @@ function Dashboard() {
           display: "flex", flexDirection: "column", gap: "12px",
         }}>
           <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#334155" }}>▶ RIGHT NOW</div>
-
           {allDone && (
             <div style={{ color: "#475569", fontSize: "15px", lineHeight: "1.6" }}>
               Day complete. Rest up.<br/>
-              Prep tomorrow's meals if you haven't already.<br/>
+              Prep tomorrow's chicken + pasta if you haven't already.<br/>
               Sleep by 22:30 — GH release peaks in deep sleep.
             </div>
           )}
@@ -825,11 +792,10 @@ function Dashboard() {
               </div>
             </div>
           )}
-
           {currentEvent && renderEventCard(currentEvent, true, false)}
         </div>
 
-        {/* --- NEXT EVENT PANEL --- */}
+        {/* Next event */}
         <div style={{
           flex: "1 1 320px", minWidth: "280px",
           background: "#0a1020", border: "1px solid #1e293b",
@@ -847,17 +813,12 @@ function Dashboard() {
               }}>{formatCountdown(countdownMs)}</div>
             )}
           </div>
-
           {!nextEvent && <div style={{ fontSize: "13px", color: "#334155" }}>No more events today.</div>}
           {nextEvent && renderEventCard(nextEvent, false, true)}
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════
-          FULL SCHEDULE — scrollable list of all events for today
-          ═══════════════════════════════════════════════════════════
-          Collapsible overview so the user can see the whole day at
-          a glance and tap any meal to swap it to Plenny Pro. */}
+      {/* ═══ FULL SCHEDULE (collapsible) ═══ */}
       <ScheduleList
         events={events}
         currentEvent={currentEvent}
@@ -866,18 +827,16 @@ function Dashboard() {
         rest={rest}
       />
 
-      {/* ═══════════════════════════════════════════════════════════
-          FOOTER — macro targets
-          ═══════════════════════════════════════════════════════════ */}
+      {/* ═══ FOOTER ═══ */}
       <div style={{
         display: "flex", justifyContent: "space-between", alignItems: "center",
         borderTop: "1px solid #0d1520", paddingTop: "8px", flexWrap: "wrap", gap: "6px",
       }}>
         <div style={{ fontSize: "9px", color: "#1e293b", letterSpacing: "2px" }}>
-          TARGET · ~1500 KCAL · {rest ? "~170P / ~50C / ~65F" : "~170P / ~110C / ~40F"} · 4L WATER
+          TARGET · {rest ? "~1370 KCAL · ~170P / ~52C / ~55F" : "~1700 KCAL · ~174P / ~150C / ~46F"} · 4L WATER
         </div>
         <div style={{ fontSize: "9px", color: "#1e293b", letterSpacing: "1px" }}>
-          REST: SUN · THU
+          GOAL: 15% BF · ~68 KG
         </div>
       </div>
     </div>
@@ -886,9 +845,7 @@ function Dashboard() {
 
 /* ================================================================
    SCHEDULE LIST COMPONENT
-   ================================================================
-   Shows all events for today in a compact list. Each meal row has
-   a Plenny Pro swap toggle. The currently active event is highlighted. */
+   ================================================================ */
 function ScheduleList({ events, currentEvent, plenny, togglePlenny, rest }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -897,7 +854,6 @@ function ScheduleList({ events, currentEvent, plenny, togglePlenny, rest }) {
       background: "#0d1520", border: "1px solid #1e293b",
       borderRadius: "6px", overflow: "hidden",
     }}>
-      {/* Toggle header */}
       <div
         className="tap-target"
         onClick={() => setExpanded(!expanded)}
@@ -925,20 +881,15 @@ function ScheduleList({ events, currentEvent, plenny, togglePlenny, rest }) {
                 background: isCurr ? c + "15" : "transparent",
                 border: isCurr ? `1px solid ${c}33` : "1px solid transparent",
               }}>
-                {/* Time */}
                 <div style={{
                   fontSize: "11px", color: isCurr ? c : "#475569",
                   fontVariantNumeric: "tabular-nums", minWidth: "42px",
                   fontWeight: isCurr ? "bold" : "normal",
                 }}>{ev.time}</div>
-
-                {/* Colour dot */}
                 <div style={{
                   width: "6px", height: "6px", borderRadius: "50%",
                   background: isCurr ? c : c + "66", flexShrink: 0,
                 }}/>
-
-                {/* Label */}
                 <div style={{
                   flex: 1, fontSize: "12px",
                   color: isCurr ? "#e2e8f0" : "#64748b",
@@ -949,8 +900,6 @@ function ScheduleList({ events, currentEvent, plenny, togglePlenny, rest }) {
                     <span style={{ fontSize: "9px", color: "#334155", marginLeft: "8px" }}>{ev.tag}</span>
                   )}
                 </div>
-
-                {/* Plenny swap toggle */}
                 {ev.type === "meal" && (
                   <div
                     className="tap-target"
@@ -975,9 +924,6 @@ function ScheduleList({ events, currentEvent, plenny, togglePlenny, rest }) {
   );
 }
 
-/* ================================================================
-   MOUNT
-   ================================================================ */
 ReactDOM.createRoot(document.getElementById("root")).render(<Dashboard />);
 </script>
 </body>
