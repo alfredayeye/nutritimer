@@ -57,10 +57,10 @@
    5. Post-gym / last meal adds 1 egg for extra fat to hit daily target.
 
    CALORIE TARGETS (revised for 75.3kg, safe recomp rate):
-   - Workout days: ~1,700 kcal — 174P / 150C / 46F
-   - Rest days:    ~1,370 kcal — 170P /  52C / 55F
-   - Weekly average: ~1,606 kcal/day
-   - TDEE estimated ~2,646 → deficit ~1,040/day → ~0.8 kg/week loss
+   - Workout days: ~1,750 kcal — 178P / 161C / 46F
+   - Rest days:    ~1,400 kcal — 173P /  60C / 55F
+   - Weekly average: ~1,650 kcal/day
+   - TDEE estimated ~2,646 → deficit ~1,000/day → ~0.8 kg/week loss
 
    FOOD SOURCING — Tesco Dun Laoghaire, Ireland (minimal shopping list):
    ┌──────────────────────────────────────────────────────────────────┐
@@ -106,20 +106,26 @@
    - €1.50/250g dry bag — cheap and shelf-stable
    - Lower GI than potato — sustained energy, no crash mid-workout
 
+   PORTIONS — identical per meal for easy Cronometer tracking:
+   - Workout day: 150g chicken × 4 meals, 113g cooked pasta × 3 carb meals,
+     100g broccoli × 4 meals, 1 banana (pre-gym), 1 egg (last meal)
+   - Rest day: 175g chicken × 4 meals, 100g cooked pasta × 1 meal,
+     100g broccoli × 4 meals, 1 egg × 2 meals (meal 2 + meal 4)
+
    MACRO VERIFICATION (workout day):
    600g chicken: 117P, 37.2F, 0C = 804 kcal
-   340g cooked pasta (~150g dry): 41.8P, 2.4F, 105.7C = 632 kcal
-   250g broccoli: 7.3P, 0.9F, 17.5C = 85 kcal
+   339g cooked pasta (113g × 3): 41.7P, 2.4F, 105.4C = 631 kcal
+   400g broccoli (100g × 4): 11.2P, 1.6F, 28C = 136 kcal
    1 banana: 1.3P, 0.4F, 27C = 105 kcal
    1 egg: 6.3P, 4.8F, 0.4C = 72 kcal
-   TOTAL: 173.7P, 45.7F, 150.6C = ~1,698 kcal ✓
+   TOTAL: 177.5P, 46.4F, 160.8C = ~1,748 kcal ✓
 
    MACRO VERIFICATION (rest day):
    700g chicken: 136.5P, 43.4F, 0C = 938 kcal
-   100g cooked pasta (~44g dry): 12.3P, 0.7F, 31.1C = 186 kcal
-   300g broccoli: 8.8P, 1.0F, 21C = 102 kcal
+   100g cooked pasta: 12.3P, 0.7F, 31.1C = 186 kcal
+   400g broccoli (100g × 4): 11.2P, 1.6F, 28C = 136 kcal
    2 eggs: 12.6P, 9.6F, 0.8C = 144 kcal
-   TOTAL: 170.2P, 54.7F, 52.9C = ~1,370 kcal ✓
+   TOTAL: 172.6P, 55.3F, 59.9C = ~1,404 kcal ✓
    ================================================================ */
 
 const { useState, useEffect, useCallback } = React;
@@ -166,17 +172,17 @@ const PLENNY_PRO = {
 
 /* Carb + Protein meal — chicken + pasta + broccoli.
    Used in pre-gym slots where glycogen loading matters.
-   ~113g cooked pasta per meal (≈50g dry) when split across 3 meals,
-   or ~170g cooked (≈75g dry) when split across 2 meals. */
+   113g cooked pasta per meal when split across 3 meals (evening preset),
+   or 170g cooked when split across 2 meals (midday preset). */
 const MEAL_CARB = {
   id: "carb", label: "MEAL", type: "meal",
   tag: "CARB + PROTEIN",
   items: [
     "150g chicken boneless thighs",
-    "~115g cooked red lentil pasta (~50g dry)",
-    "Broccoli — unlimited",
+    "113g cooked red lentil pasta",
+    "100g broccoli",
   ],
-  note: "Chicken provides 29.3g protein + 9.3g fat naturally. Lentil pasta adds 14.1g protein and 35.8g carbs. Combined: 43.4g protein per meal. Fat from chicken is moderate enough (~9g) to not slow gastric emptying significantly.",
+  note: "Chicken provides 29.3g protein + 9.3g fat naturally. Lentil pasta adds 13.9g protein and 35.1g carbs. Combined: 43.2g protein per meal. Fat from chicken is moderate enough (~9g) to not slow gastric emptying significantly.",
   supplements: [],
 };
 
@@ -188,9 +194,9 @@ const MEAL_PRE_GYM = {
   tag: "PRE-GYM · CARB + PROTEIN",
   items: [
     "150g chicken boneless thighs",
-    "~110g cooked red lentil pasta (~48g dry)",
+    "113g cooked red lentil pasta",
     "1 banana",
-    "Broccoli — unlimited",
+    "100g broccoli",
   ],
   note: "Two-wave carb delivery: banana peaks ~30min for fast glucose, lentil pasta sustains through the session. Take your pre-workout 30min before gym. Do NOT skip the pasta — this is what fuels the workout.",
   supplements: ["ON Pre-Workout — 30min before gym"],
@@ -205,7 +211,7 @@ const MEAL_NOCARB = {
   tag: "PROTEIN + FAT · NO CARBS",
   items: [
     "150g chicken boneless thighs",
-    "Broccoli — unlimited",
+    "100g broccoli",
   ],
   note: "No carbs = low insulin = fat oxidation mode. Chicken's 6.2g fat per 100g provides fat naturally — no olive oil needed. Simple.",
   supplements: [],
@@ -220,7 +226,7 @@ const MEAL_LAST = {
   items: [
     "150g chicken boneless thighs",
     "1 whole egg",
-    "Broccoli — unlimited",
+    "100g broccoli",
   ],
   note: "Egg adds 6.3g protein + 4.8g fat to push daily fat above the 40g hormone floor. Low insulin going into sleep maximises overnight GH release and fat oxidation. Chicken + egg = slow-digesting protein feeds muscles overnight.",
   supplements: ["Omega-3 — 1 capsule (fat present aids absorption)"],
@@ -257,8 +263,8 @@ const makeGym = (carbMeals) => ({
    carb (pasta) meals go BEFORE the gym for glycogen loading.
    Post-gym / evening meals are no-carb (chicken + broccoli only).
 
-   All presets total ~600g chicken, ~340g cooked pasta, ~250g broccoli,
-   1 banana, 1 egg = ~1,700 kcal.
+   All presets total 600g chicken (150g × 4), 339g cooked pasta (113g × 3),
+   400g broccoli (100g × 4), 1 banana, 1 egg = ~1,750 kcal.
 
    The egg always goes in the LAST meal of the day.
    ---------------------------------------------------------------- */
@@ -333,7 +339,7 @@ const PRESETS = {
    This keeps insulin low for 12+ hours, maximising fat oxidation
    on the days you're not training.
 
-   Total: 700g chicken, 100g cooked pasta, 300g broccoli, 2 eggs
+   Total: 700g chicken, 100g cooked pasta, 400g broccoli, 2 eggs
    = ~1,370 kcal · 170P / 55F / 52C
 
    Auto-triggered on Sunday (0) and Thursday (4).
@@ -346,8 +352,8 @@ const REST_EVENTS = [
     time: "08:30", endTime: "12:30",
     items: [
       "175g chicken boneless thighs",
-      "100g cooked red lentil pasta (~44g dry)",
-      "Broccoli — unlimited",
+      "100g cooked red lentil pasta",
+      "100g broccoli",
     ],
     note: "Last starch of the day. Only ~31g carbs — just enough to keep thyroid and metabolism responsive. No carbs after this on rest days. Afternoon insulin stays low, maximising fat oxidation for 12+ hours.",
     supplements: [],
@@ -359,7 +365,7 @@ const REST_EVENTS = [
     items: [
       "175g chicken boneless thighs",
       "1 whole egg",
-      "Broccoli — unlimited",
+      "100g broccoli",
     ],
     note: "Egg adds extra fat here — with no carbs present, there's no insulin spike to shuttle fat into storage. Fat goes to oxidation and hormone maintenance. Chicken + egg = 40g protein.",
     supplements: ["Omega-3 — 1 capsule (fat present aids absorption)"],
@@ -370,7 +376,7 @@ const REST_EVENTS = [
     time: "16:30", endTime: "20:30",
     items: [
       "175g chicken boneless thighs",
-      "Broccoli — unlimited",
+      "100g broccoli",
     ],
     note: "Simple. Chicken and broccoli. Fat oxidation continues. Stay hydrated.",
     supplements: ["Creatine 5g standalone — rest day maintenance dose"],
@@ -382,7 +388,7 @@ const REST_EVENTS = [
     items: [
       "175g chicken boneless thighs",
       "1 whole egg",
-      "Broccoli — unlimited",
+      "100g broccoli",
     ],
     note: "Low insulin going into sleep. Chicken provides slow-digesting protein for overnight muscle repair. Egg adds final fat contribution. Maximises overnight GH release and fat oxidation. Sleep by 22:30.",
     supplements: [],
@@ -833,7 +839,7 @@ function Dashboard() {
         borderTop: "1px solid #0d1520", paddingTop: "8px", flexWrap: "wrap", gap: "6px",
       }}>
         <div style={{ fontSize: "9px", color: "#1e293b", letterSpacing: "2px" }}>
-          TARGET · {rest ? "~1370 KCAL · ~170P / ~52C / ~55F" : "~1700 KCAL · ~174P / ~150C / ~46F"} · 4L WATER
+          TARGET · {rest ? "~1400 KCAL · ~173P / ~60C / ~55F" : "~1750 KCAL · ~178P / ~161C / ~46F"} · 4L WATER
         </div>
         <div style={{ fontSize: "9px", color: "#1e293b", letterSpacing: "1px" }}>
           GOAL: 15% BF · ~68 KG
