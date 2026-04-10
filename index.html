@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   /* ============================================================
      NUTRITIMER — GLOBAL STYLES
@@ -56,11 +57,15 @@
       Override is date-scoped in localStorage — auto-expires at midnight.
    5. Post-gym / last meal adds 1 egg for extra fat to hit daily target.
 
-   CALORIE TARGETS (revised for 75.3kg, safe recomp rate):
-   - Workout days: ~1,750 kcal — 178P / 161C / 46F
-   - Rest days:    ~1,400 kcal — 173P /  60C / 55F
-   - Weekly average: ~1,650 kcal/day
-   - TDEE estimated ~2,646 → deficit ~1,000/day → ~0.8 kg/week loss
+   CALORIE TARGETS (revised Apr 2026 for 73.8kg, aggressive recomp):
+   - Workout days: ~1,510 kcal — 172P / 115C / 39F (THIGH mode)
+                   ~1,550 kcal — 180P / 115C / 32F (BREAST mode, +eggs)
+   - Rest days:    ~1,210 kcal — 167P /  63C / 38F (THIGH mode)
+                   ~1,260 kcal — 175P /  63C / 32F (BREAST mode, +eggs)
+   - Weekly avg:   ~1,390 kcal/day (4 workout + 3 rest)
+   - TDEE est.     ~2,350 → deficit ~960/day → ~0.85 kg/week loss
+   - Protein toggle: defaults to thigh (fattier, simpler). Breast mode
+     swaps 120g thigh → 100g breast + 1 egg per meal to match macros.
 
    FOOD SOURCING — Tesco Dun Laoghaire, Ireland (minimal shopping list):
    ┌──────────────────────────────────────────────────────────────────┐
@@ -109,9 +114,9 @@
 
    PORTIONS — identical per meal for easy Cronometer tracking:
    - Workout day: 120g chicken × 4 meals, 110g cooked pasta × 3 carb meals,
-     100g broccoli × 4 meals, 1 banana (pre-gym), 1 egg (last meal)
+     80g broccoli × 4 meals, 1 banana (pre-gym), 1 egg (last meal)
    - Rest day: 175g chicken × 4 meals, 100g cooked pasta × 1 meal,
-     100g broccoli × 4 meals, 1 egg × 2 meals (meal 2 + meal 4)
+     80g broccoli × 4 meals, 1 egg × 2 meals (meal 2 + meal 4)
 
    MEAL TIMES — fixed at 08:30, 12:30, 16:30, 20:30 every day.
    Only exception: morning gym (08:00) shifts meal 1 to 10:00
@@ -136,7 +141,7 @@
    TOTAL: 172.6P, 55.3F, 59.9C = ~1,404 kcal ✓
    ================================================================ */
 
-const { useState, useEffect, useCallback } = React;
+const { useState, useEffect, useCallback, useRef } = React;
 
 /* ----------------------------------------------------------------
    CONSTANTS
@@ -153,6 +158,124 @@ const TYPE_COLORS = {
   meal: "#4ade80",
   fuel: "#fb923c",
   gym:  "#60a5fa",
+};
+
+/* ----------------------------------------------------------------
+   FOOD NUTRITION DATABASE
+   ----------------------------------------------------------------
+   All values per 100g unless otherwise noted. Sourced from Tesco
+   labels + Cronometer. Used for dynamic macro computation across
+   the whole day — when the user toggles breast/thigh or switches
+   between rest/workout/preset, the footer totals update live.
+   ---------------------------------------------------------------- */
+const FOODS = {
+  thigh:    { kcal: 134,  p: 19.5, c: 0,    f: 6.2 },   // per 100g raw
+  breast:   { kcal: 106,  p: 23.9, c: 0,    f: 1.1 },   // per 100g raw
+  pasta:    { kcal: 186,  p: 12.3, c: 31.1, f: 0.7 },   // per 100g cooked
+  broccoli: { kcal: 40.6, p: 2.8,  c: 7,    f: 0.4 },   // per 100g
+  egg:      { kcal: 77.5, p: 6.3,  c: 0.4,  f: 4.8 },   // per 1 large egg (unit)
+  banana:   { kcal: 105,  p: 1.3,  c: 27,   f: 0.4 },   // per 1 medium (unit)
+  whey:     { kcal: 110,  p: 24,   c: 3,    f: 2   },   // per 2 scoops (serving)
+  preWO:    { kcal: 32,   p: 0,    c: 8,    f: 0   },   // per 1 scoop
+};
+
+/* Portion sizes per protein source and day type.
+   These map directly to the on-screen meal item strings. */
+const PORTIONS = {
+  workout: {
+    thigh:  { grams: 180, cooked: 130, label: "130g chicken boneless thighs (cooked)", targetEggs: 0 },
+    breast: { grams: 90,  cooked: 68,  label: "68g chicken breast (cooked)",           targetEggs: 2 },
+  },
+  rest: {
+    thigh:  { grams: 180, cooked: 130, label: "130g chicken boneless thighs (cooked)", targetEggs: 0 },
+    breast: { grams: 90,  cooked: 68,  label: "68g chicken breast (cooked)",           targetEggs: 2 },
+  },
+};
+
+const loadProtein = () => {
+  try { return localStorage.getItem("nutritimer-protein") || "thigh"; }
+  catch { return "thigh"; }
+};
+const saveProtein = (v) => {
+  try { localStorage.setItem("nutritimer-protein", v); } catch {}
+};
+
+/* Transform a meal's items list according to protein + day type.
+   Swaps the chicken line and injects an extra egg in breast mode. */
+const applyProtein = (items, protein, rest) => {
+  const portion = rest ? PORTIONS.rest[protein] : PORTIONS.workout[protein];
+  const out = [];
+  let chickenSwapped = false;
+  for (const item of items) {
+    if (/chicken/i.test(item) && !chickenSwapped) {
+      out.push(portion.label);
+      chickenSwapped = true;
+    } else {
+      out.push(item);
+    }
+  }
+  // In breast mode every meal should have `targetEggs` eggs total
+  // to recover the fat lost from switching off thighs.
+  if (portion.targetEggs > 0) {
+    const eggIdx = out.findIndex(x => /whole egg/i.test(x));
+    const eggLine = portion.targetEggs === 1 ? "1 whole egg" : `${portion.targetEggs} whole eggs`;
+    if (eggIdx >= 0) {
+      out[eggIdx] = eggLine;
+    } else {
+      out.push(eggLine);
+    }
+  }
+  return out;
+};
+
+/* Compute total macros for a day given events + protein selection. */
+const computeDayMacros = (events, protein, rest) => {
+  const portion = rest ? PORTIONS.rest[protein] : PORTIONS.workout[protein];
+  const food = FOODS[protein];
+  let kcal = 0, p = 0, c = 0, f = 0;
+
+  events.forEach(ev => {
+    if (ev.type !== "meal") return;
+    const items = applyProtein(ev.items, protein, rest);
+    items.forEach(line => {
+      const addFood = (key, grams) => {
+        kcal += FOODS[key].kcal * grams / 100;
+        p    += FOODS[key].p    * grams / 100;
+        c    += FOODS[key].c    * grams / 100;
+        f    += FOODS[key].f    * grams / 100;
+      };
+      const addUnit = (key, units) => {
+        kcal += FOODS[key].kcal * units;
+        p    += FOODS[key].p    * units;
+        c    += FOODS[key].c    * units;
+        f    += FOODS[key].f    * units;
+      };
+      // chicken (current portion)
+      if (/chicken/i.test(line)) {
+        addFood(protein, portion.grams);
+      } else if (/pasta/i.test(line)) {
+        const m = line.match(/(\d+)g/);
+        if (m) addFood("pasta", parseInt(m[1]));
+      } else if (/broccoli/i.test(line)) {
+        const m = line.match(/(\d+)g/);
+        if (m) addFood("broccoli", parseInt(m[1]));
+      } else if (/egg/i.test(line)) {
+        const m = line.match(/^(\d+)/);
+        addUnit("egg", m ? parseInt(m[1]) : 1);
+      } else if (/banana/i.test(line)) {
+        addUnit("banana", 1);
+      } else if (/whey/i.test(line) && !/optional/i.test(line)) {
+        addUnit("whey", 1);
+      }
+    });
+  });
+
+  return {
+    kcal: Math.round(kcal),
+    p: Math.round(p),
+    c: Math.round(c),
+    f: Math.round(f),
+  };
 };
 
 /* Plenny Pro — swaps any meal when user taps the button */
@@ -185,9 +308,9 @@ const MEAL_CARB = {
   id: "carb", label: "MEAL", type: "meal",
   tag: "CARB + PROTEIN",
   items: [
-    "120g chicken boneless thighs",
-    "110g cooked red lentil pasta",
-    "100g broccoli",
+    "130g chicken boneless thighs (cooked)",
+    "70g red lentil pasta",
+    "80g broccoli",
   ],
   note: "Chicken provides protein + fat naturally. Lentil pasta adds protein and carbs. Fat from chicken is moderate enough to not slow gastric emptying significantly.",
   supplements: [],
@@ -200,10 +323,10 @@ const MEAL_PRE_GYM = {
   id: "pre-gym", label: "MEAL", type: "meal",
   tag: "PRE-GYM · CARB + PROTEIN",
   items: [
-    "120g chicken boneless thighs",
-    "110g cooked red lentil pasta",
+    "130g chicken boneless thighs (cooked)",
+    "70g red lentil pasta",
     "1 banana",
-    "100g broccoli",
+    "80g broccoli",
   ],
   note: "Two-wave carb delivery: banana peaks ~30min for fast glucose, lentil pasta sustains through the session. Take your pre-workout 30min before gym. Do NOT skip the pasta — this is what fuels the workout.",
   supplements: ["ON Pre-Workout — 30min before gym"],
@@ -217,8 +340,8 @@ const MEAL_NOCARB = {
   id: "nocarb", label: "MEAL", type: "meal",
   tag: "PROTEIN + FAT · NO CARBS",
   items: [
-    "120g chicken boneless thighs",
-    "100g broccoli",
+    "130g chicken boneless thighs (cooked)",
+    "80g broccoli",
   ],
   note: "No carbs = low insulin = fat oxidation mode. Chicken's 6.2g fat per 100g provides fat naturally — no olive oil needed. Simple.",
   supplements: [],
@@ -231,9 +354,9 @@ const MEAL_LAST = {
   id: "last", label: "MEAL", type: "meal",
   tag: "PROTEIN + FAT · LAST MEAL",
   items: [
-    "120g chicken boneless thighs",
+    "130g chicken boneless thighs (cooked)",
     "1 whole egg",
-    "100g broccoli",
+    "80g broccoli",
     "Whey protein shake (optional — if needed for protein target)",
   ],
   note: "Egg adds 6.3g protein + 4.8g fat to push daily fat above the 40g hormone floor. Low insulin going into sleep maximises overnight GH release and fat oxidation. Chicken + egg = slow-digesting protein feeds muscles overnight.",
@@ -361,9 +484,9 @@ const REST_EVENTS = [
     tag: "LAST CARB MEAL TODAY",
     time: "08:30", endTime: "12:30",
     items: [
-      "175g chicken boneless thighs",
-      "100g cooked red lentil pasta",
-      "100g broccoli",
+      "130g chicken boneless thighs (cooked)",
+      "70g red lentil pasta",
+      "80g broccoli",
     ],
     note: "Last starch of the day. Only ~31g carbs — just enough to keep thyroid and metabolism responsive. No carbs after this on rest days. Afternoon insulin stays low, maximising fat oxidation for 12+ hours.",
     supplements: [],
@@ -373,9 +496,9 @@ const REST_EVENTS = [
     tag: "NO CARBS",
     time: "12:30", endTime: "16:30",
     items: [
-      "175g chicken boneless thighs",
+      "130g chicken boneless thighs (cooked)",
       "1 whole egg",
-      "100g broccoli",
+      "80g broccoli",
     ],
     note: "Egg adds extra fat here — with no carbs present, there's no insulin spike to shuttle fat into storage. Fat goes to oxidation and hormone maintenance. Chicken + egg = 40g protein.",
     supplements: ["Omega-3 — 1 capsule (fat present aids absorption)"],
@@ -385,8 +508,8 @@ const REST_EVENTS = [
     tag: "NO CARBS",
     time: "16:30", endTime: "20:30",
     items: [
-      "175g chicken boneless thighs",
-      "100g broccoli",
+      "130g chicken boneless thighs (cooked)",
+      "80g broccoli",
     ],
     note: "Simple. Chicken and broccoli. Fat oxidation continues. Stay hydrated.",
     supplements: ["Creatine 5g standalone — rest day maintenance dose"],
@@ -396,9 +519,9 @@ const REST_EVENTS = [
     tag: "NO CARBS · LAST MEAL",
     time: "20:30", endTime: "22:30",
     items: [
-      "175g chicken boneless thighs",
+      "130g chicken boneless thighs (cooked)",
       "1 whole egg",
-      "100g broccoli",
+      "80g broccoli",
     ],
     note: "Low insulin going into sleep. Chicken provides slow-digesting protein for overnight muscle repair. Egg adds final fat contribution. Maximises overnight GH release and fat oxidation. Sleep by 22:30.",
     supplements: [],
@@ -461,6 +584,381 @@ const saveSwaps = (v) => {
 };
 
 /* ================================================================
+   PHYSIOLOGY CHART COMPONENT
+   ================================================================
+   Generates insulin / glucose / glycogen / fat-ox / amino / GH /
+   cortisol / caffeine curves from the current day's events. The
+   shape of every curve shifts with the meal times and gym slot,
+   so when the user changes preset (morning/midday/evening) or
+   toggles rest day, the physiological response updates live.
+
+   Values are normalised to 0-100 (relative % of daily range) so
+   they can share a single Y axis without one line dwarfing another.
+   ================================================================ */
+
+/* Gaussian bell helper: peak `h` at centre `c`, width `w` */
+const bell = (x, c, h, w) => h * Math.exp(-((x - c) * (x - c)) / (2 * w * w));
+
+function generatePhysiology(events, rest) {
+  const startMin = 6 * 60;
+  const endMin = 24 * 60 + 30;
+  const step = 15;
+  const points = [];
+  for (let t = startMin; t <= endMin; t += step) points.push(t);
+
+  const insulin   = points.map(() => 5);
+  const glucose   = points.map(() => 28);
+  const fatOx     = points.map(() => 80);
+  const amino     = points.map(() => 15);
+  const gh        = points.map(() => 8);
+  const cortisol  = points.map(() => 0);
+  const caffeine  = points.map(() => 0);
+  const glycogen  = [];
+
+  /* Cortisol awakening response + circadian decline.
+     Peak ~7:30, then exponential decline through the day. */
+  points.forEach((t, i) => {
+    const hrsFromWake = (t - 7 * 60) / 60;
+    if (hrsFromWake < 0) {
+      cortisol[i] = Math.max(30, 90 + hrsFromWake * 20);
+    } else {
+      cortisol[i] = Math.max(4, 95 * Math.exp(-hrsFromWake / 4.5));
+    }
+  });
+
+  /* For each meal, bolt on insulin + glucose + amino contributions. */
+  events.forEach(ev => {
+    if (ev.type !== "meal" && ev.type !== "fuel") return;
+    const mealT = toMin(ev.time);
+    const itemStr = ev.items.join(" ").toLowerCase();
+    const hasCarbs = /pasta|banana/.test(itemStr);
+    const hasFastCarbs = /banana/.test(itemStr) && !/pasta/.test(itemStr);
+    const peak = hasFastCarbs ? 70 : hasCarbs ? 62 : 24;
+    const peakOffset = hasFastCarbs ? 25 : 40;
+    const width = hasFastCarbs ? 28 : 42;
+
+    points.forEach((t, i) => {
+      const dt = t - mealT;
+      if (dt >= -20 && dt <= 200) {
+        insulin[i] = Math.max(insulin[i], 5 + bell(dt, peakOffset, peak - 5, width));
+        glucose[i] = Math.max(glucose[i], 28 + bell(dt, peakOffset - 5, (peak - 5) * 0.75, width));
+      }
+      if (dt >= 0 && dt <= 260) {
+        amino[i] = Math.max(amino[i], 15 + bell(dt, 95, 55, 65));
+      }
+    });
+  });
+
+  /* Fat oxidation inversely tracks insulin. High baseline when
+     insulin is at floor, drops during insulin spikes. */
+  points.forEach((t, i) => {
+    fatOx[i] = Math.max(10, 85 - (insulin[i] - 5) * 1.15);
+  });
+
+  /* Glycogen walk-through:
+     - Starts ~68% after overnight decline
+     - Drops slightly during fasted morning walk
+     - Rises with each carb meal (pasta/banana)
+     - Plummets during gym
+     - Slowly restocks from later carb meals */
+  let glyc = 68;
+  const firstMealMin = events.find(e => e.type === "meal") ? toMin(events.find(e => e.type === "meal").time) : 8 * 60;
+  const gymEv = events.find(e => e.type === "gym");
+  const gymStart = gymEv ? toMin(gymEv.time) : null;
+  const gymEnd = gymEv ? toMin(gymEv.endTime) : null;
+
+  points.forEach((t, i) => {
+    // Fasted walk: small glycogen draw
+    if (!rest && t >= 7 * 60 && t < firstMealMin) glyc -= 0.25;
+    // Carb meal: replenish, with a 30-min lag
+    events.forEach(ev => {
+      if (ev.type !== "meal" && ev.type !== "fuel") return;
+      const mt = toMin(ev.time);
+      const itemStr = ev.items.join(" ").toLowerCase();
+      if (/pasta|banana/.test(itemStr) && t >= mt + 30 && t < mt + 150) {
+        glyc += /banana.*pasta|pasta.*banana/.test(itemStr) ? 0.9 : 0.55;
+      }
+    });
+    // Gym: rapid depletion
+    if (gymStart && t >= gymStart && t <= gymEnd) glyc -= 3.2;
+    // Clamp
+    glyc = Math.max(30, Math.min(98, glyc));
+    glycogen.push(glyc);
+  });
+
+  /* Caffeine: only exists on workout days, ingested 30 min pre-gym.
+     Rise + decay kinetics: sharp rise over ~45 min, slow exponential decay. */
+  if (gymStart && !rest) {
+    const ingestT = gymStart - 30;
+    points.forEach((t, i) => {
+      const dt = t - ingestT;
+      if (dt < 0) return;
+      caffeine[i] = 88 * (1 - Math.exp(-dt / 22)) * Math.exp(-dt / 340);
+    });
+  }
+
+  /* Growth hormone:
+     - Small pulses during day when insulin is low
+     - Big spike during training (between-set anaerobic stress)
+     - Largest pulse 30-90 min into sleep (22:30 → 02:00) */
+  points.forEach((t, i) => {
+    // Suppressed by insulin
+    if (insulin[i] > 20) gh[i] = Math.max(gh[i], 5);
+    // Sleep pulse
+    if (t >= 22 * 60 + 30) {
+      const minsAsleep = t - (22 * 60 + 30);
+      gh[i] = Math.max(gh[i], 15 + bell(minsAsleep, 70, 75, 45));
+    }
+  });
+  if (gymStart) {
+    points.forEach((t, i) => {
+      if (t >= gymStart && t <= gymEnd + 30) {
+        gh[i] = Math.max(gh[i], bell(t - gymStart, 45, 58, 30));
+      }
+    });
+  }
+
+  const clamp = arr => arr.map(v => Math.max(0, Math.min(100, Math.round(v))));
+  const labels = points.map(t => `${padZ(Math.floor(t / 60) % 24)}:${padZ(t % 60)}`);
+
+  return {
+    labels, points,
+    insulin:  clamp(insulin),
+    glucose:  clamp(glucose),
+    glycogen: clamp(glycogen),
+    fatOx:    clamp(fatOx),
+    amino:    clamp(amino),
+    gh:       clamp(gh),
+    cortisol: clamp(cortisol),
+    caffeine: clamp(caffeine),
+  };
+}
+
+const SERIES = [
+  { key: "insulin",  label: "Insulin",         color: "#ef4444" },
+  { key: "glucose",  label: "Blood glucose",   color: "#f59e0b" },
+  { key: "glycogen", label: "Muscle glycogen", color: "#3b82f6" },
+  { key: "fatOx",    label: "Fat oxidation",   color: "#10b981" },
+  { key: "amino",    label: "Amino acids",     color: "#a78bfa" },
+  { key: "gh",       label: "Growth hormone",  color: "#ec4899" },
+  { key: "cortisol", label: "Cortisol",        color: "#eab308" },
+  { key: "caffeine", label: "Caffeine",        color: "#94a3b8" },
+];
+
+function PhysiologyChart({ events, rest, preset }) {
+  const [expanded, setExpanded] = useState(false);
+  const [active, setActive] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("nutritimer-phys-active") || "null");
+      if (stored) return stored;
+    } catch {}
+    return { insulin: true, glucose: true, glycogen: true, fatOx: true, amino: false, gh: true, cortisol: true, caffeine: false };
+  });
+  const canvasRef = useRef(null);
+  const chartRef = useRef(null);
+  const wrapRef = useRef(null);
+
+  const toggle = (key) => {
+    setActive(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      try { localStorage.setItem("nutritimer-phys-active", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!expanded) return;
+    if (!canvasRef.current || !window.Chart) return;
+
+    const phys = generatePhysiology(events, rest);
+
+    if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+
+    const datasets = SERIES.filter(s => active[s.key]).map(s => ({
+      label: s.label,
+      data: phys[s.key],
+      borderColor: s.color,
+      backgroundColor: s.color + "14",
+      borderWidth: 1.8,
+      pointRadius: 0,
+      pointHitRadius: 10,
+      tension: 0.38,
+      fill: false,
+    }));
+
+    // Vertical line annotations for each event time
+    const eventLines = {
+      id: "eventLines",
+      afterDraw(chart) {
+        const { ctx, scales: { x, y } } = chart;
+        events.forEach(ev => {
+          const mt = toMin(ev.time);
+          const labelIdx = phys.points.indexOf(Math.round(mt / 15) * 15);
+          if (labelIdx < 0) return;
+          const px = x.getPixelForValue(labelIdx);
+          const col = TYPE_COLORS[ev.type] || "#4ade80";
+          ctx.save();
+          ctx.strokeStyle = col + "55";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(px, y.top);
+          ctx.lineTo(px, y.bottom);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = col;
+          ctx.font = "9px 'Courier New', monospace";
+          ctx.textAlign = "center";
+          const shortLabel = ev.type === "gym" ? "GYM" : ev.label.replace("MEAL ", "M");
+          ctx.fillText(shortLabel, px, y.top - 4);
+          ctx.restore();
+        });
+      },
+    };
+
+    chartRef.current = new window.Chart(canvasRef.current, {
+      type: "line",
+      data: { labels: phys.labels, datasets },
+      plugins: [eventLines],
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 320 },
+        layout: { padding: { top: 18, right: 6, bottom: 0, left: 0 } },
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#0d1520",
+            titleColor: "#e2e8f0",
+            bodyColor: "#cbd5e1",
+            borderColor: "#1e293b",
+            borderWidth: 1,
+            padding: 10,
+            cornerRadius: 4,
+            titleFont: { size: 11, family: "'Courier New', monospace" },
+            bodyFont: { size: 10, family: "'Courier New', monospace" },
+            callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}%` },
+          },
+        },
+        scales: {
+          x: {
+            grid: { color: "#1e293b55", lineWidth: 0.5 },
+            ticks: {
+              color: "#475569",
+              font: { size: 9, family: "'Courier New', monospace" },
+              maxRotation: 0,
+              autoSkip: false,
+              callback(val, idx) {
+                const t = phys.points[idx];
+                if (t === undefined) return "";
+                if (t % 120 !== 0) return "";
+                return `${padZ(Math.floor(t / 60) % 24)}:00`;
+              },
+            },
+          },
+          y: {
+            min: 0, max: 100,
+            grid: { color: "#1e293b55", lineWidth: 0.5 },
+            ticks: {
+              color: "#475569",
+              font: { size: 9, family: "'Courier New', monospace" },
+              stepSize: 25,
+              callback: v => v + "%",
+            },
+          },
+        },
+      },
+    });
+
+    return () => {
+      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+    };
+  }, [expanded, events, rest, preset, active]);
+
+  return (
+    <div style={{
+      background: "#0d1520", border: "1px solid #1e293b",
+      borderRadius: "6px", overflow: "hidden",
+    }}>
+      <div
+        className="tap-target"
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          padding: "12px 16px",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#334155" }}>
+            PHYSIOLOGY · 24H
+          </div>
+          {!expanded && (
+            <div style={{ fontSize: "9px", color: "#1e293b", letterSpacing: "1px" }}>
+              TAP TO REVEAL
+            </div>
+          )}
+        </div>
+        <div style={{ fontSize: "12px", color: "#475569" }}>{expanded ? "▲" : "▼"}</div>
+      </div>
+
+      {expanded && (
+        <div ref={wrapRef} style={{ padding: "4px 14px 16px" }}>
+          {/* Toggle chips */}
+          <div style={{
+            display: "flex", flexWrap: "wrap", gap: "6px",
+            marginBottom: "12px",
+          }}>
+            {SERIES.map(s => {
+              const on = !!active[s.key];
+              return (
+                <div
+                  key={s.key}
+                  className="tap-target"
+                  onClick={() => toggle(s.key)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "6px",
+                    padding: "5px 10px", borderRadius: "20px",
+                    background: on ? s.color + "1a" : "transparent",
+                    border: `1px solid ${on ? s.color + "88" : "#1e293b"}`,
+                    fontSize: "10px", letterSpacing: "0.5px",
+                    color: on ? s.color : "#475569",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <div style={{
+                    width: "7px", height: "7px", borderRadius: "50%",
+                    background: s.color,
+                    opacity: on ? 1 : 0.3,
+                  }}/>
+                  {s.label}
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ position: "relative", width: "100%", height: "260px" }}>
+            <canvas ref={canvasRef}/>
+          </div>
+
+          <div style={{
+            marginTop: "10px", fontSize: "9px", color: "#334155",
+            lineHeight: "1.6", letterSpacing: "0.5px",
+          }}>
+            Curves are normalised 0–100% and anchored to your current{" "}
+            <span style={{ color: "#4ade80" }}>
+              {rest ? "REST DAY" : `${preset.toUpperCase()} GYM`}
+            </span>{" "}
+            schedule. Dashed verticals mark meal and gym events.
+            Fat oxidation peaks in the green valleys between insulin spikes.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================
    MAIN DASHBOARD COMPONENT
    ================================================================ */
 function Dashboard() {
@@ -468,6 +966,7 @@ function Dashboard() {
   const [preset, setPreset]   = useState(loadPreset);
   const [plenny, setPlenny]   = useState(loadSwaps);
   const [restOverride, setRestOverride] = useState(loadRestOverride);
+  const [protein, setProtein] = useState(loadProtein);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -477,6 +976,14 @@ function Dashboard() {
   const selectPreset = useCallback((p) => {
     setPreset(p);
     savePreset(p);
+  }, []);
+
+  const toggleProtein = useCallback(() => {
+    setProtein(prev => {
+      const next = prev === "thigh" ? "breast" : "thigh";
+      saveProtein(next);
+      return next;
+    });
   }, []);
 
   const togglePlenny = useCallback((eventId) => {
@@ -546,7 +1053,10 @@ function Dashboard() {
     if (!ev) return null;
     const c = TYPE_COLORS[ev.type] || "#4ade80";
     const isSwapped = ev.type === "meal" && plenny[ev.id];
-    const display = isSwapped ? { ...PLENNY_PRO, id: ev.id, type: "meal", time: ev.time, endTime: ev.endTime } : ev;
+    const baseDisplay = isSwapped ? { ...PLENNY_PRO, id: ev.id, type: "meal", time: ev.time, endTime: ev.endTime } : ev;
+    const display = !isSwapped && ev.type === "meal"
+      ? { ...baseDisplay, items: applyProtein(baseDisplay.items, protein, rest) }
+      : baseDisplay;
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -668,6 +1178,56 @@ function Dashboard() {
         </div>
       </div>
 
+      {/* ═══ PROTEIN SOURCE TOGGLE ═══ */}
+      <div style={{ display: "flex", gap: "8px", alignItems: "stretch" }}>
+        <div style={{
+          flex: "0 0 auto",
+          padding: "9px 14px",
+          fontSize: "9px", letterSpacing: "2px", color: "#334155",
+          display: "flex", alignItems: "center",
+          borderRadius: "6px", border: "1px solid #0d1520",
+          background: "#0a1020",
+        }}>PROTEIN</div>
+        <div
+          className="tap-target"
+          onClick={toggleProtein}
+          style={{
+            flex: "1 1 0",
+            padding: "9px 14px", borderRadius: "6px",
+            background: protein === "thigh" ? "#4ade8018" : "#0d1520",
+            border: `1px solid ${protein === "thigh" ? "#4ade8066" : "#1e293b"}`,
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px",
+          }}
+        >
+          <div style={{
+            fontSize: "12px", fontWeight: "bold", letterSpacing: "2px",
+            color: protein === "thigh" ? "#4ade80" : "#475569",
+          }}>THIGHS</div>
+          <div style={{ fontSize: "9px", color: protein === "thigh" ? "#4ade8099" : "#334155" }}>
+            {(rest ? PORTIONS.rest.thigh.cooked : PORTIONS.workout.thigh.cooked)}g cooked × meal
+          </div>
+        </div>
+        <div
+          className="tap-target"
+          onClick={toggleProtein}
+          style={{
+            flex: "1 1 0",
+            padding: "9px 14px", borderRadius: "6px",
+            background: protein === "breast" ? "#4ade8018" : "#0d1520",
+            border: `1px solid ${protein === "breast" ? "#4ade8066" : "#1e293b"}`,
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px",
+          }}
+        >
+          <div style={{
+            fontSize: "12px", fontWeight: "bold", letterSpacing: "2px",
+            color: protein === "breast" ? "#4ade80" : "#475569",
+          }}>BREAST</div>
+          <div style={{ fontSize: "9px", color: protein === "breast" ? "#4ade8099" : "#334155" }}>
+            {(rest ? PORTIONS.rest.breast.cooked : PORTIONS.workout.breast.cooked)}g cooked + 2 eggs
+          </div>
+        </div>
+      </div>
+
       {/* ═══ WORKOUT PRESET SELECTOR ═══ */}
       {!rest && (
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -767,6 +1327,9 @@ function Dashboard() {
         </div>
       </div>
 
+      {/* ═══ PHYSIOLOGY CHART (collapsible, tied to timeline) ═══ */}
+      <PhysiologyChart events={events} rest={rest} preset={preset}/>
+
       {/* ═══ MAIN PANELS ═══ */}
       <div style={{ display: "flex", gap: "14px", flex: 1, flexWrap: "wrap" }}>
         {/* Current event */}
@@ -844,17 +1407,22 @@ function Dashboard() {
       />
 
       {/* ═══ FOOTER ═══ */}
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        borderTop: "1px solid #0d1520", paddingTop: "8px", flexWrap: "wrap", gap: "6px",
-      }}>
-        <div style={{ fontSize: "9px", color: "#1e293b", letterSpacing: "2px" }}>
-          TARGET · {rest ? "~1400 KCAL · ~173P / ~60C / ~55F" : "~1750 KCAL · ~178P / ~161C / ~46F"} · 4L WATER
-        </div>
-        <div style={{ fontSize: "9px", color: "#1e293b", letterSpacing: "1px" }}>
-          GOAL: 15% BF · ~68 KG
-        </div>
-      </div>
+      {(() => {
+        const macros = computeDayMacros(events, protein, rest);
+        return (
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            borderTop: "1px solid #0d1520", paddingTop: "8px", flexWrap: "wrap", gap: "6px",
+          }}>
+            <div style={{ fontSize: "9px", color: "#334155", letterSpacing: "2px" }}>
+              TARGET · {macros.kcal} KCAL · {macros.p}P / {macros.c}C / {macros.f}F · 4L WATER
+            </div>
+            <div style={{ fontSize: "9px", color: "#1e293b", letterSpacing: "1px" }}>
+              {protein.toUpperCase()} · {rest ? "REST" : "WORKOUT"} · GOAL 68 KG
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
