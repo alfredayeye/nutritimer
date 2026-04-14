@@ -169,8 +169,8 @@ const TYPE_COLORS = {
    between rest/workout/preset, the footer totals update live.
    ---------------------------------------------------------------- */
 const FOODS = {
-  thigh:    { kcal: 134,  p: 19.5, c: 0,    f: 6.2 },   // per 100g raw
-  breast:   { kcal: 106,  p: 23.9, c: 0,    f: 1.1 },   // per 100g raw
+  breast:   { kcal: 110,  p: 24.7, c: 0.1,  f: 1.18 },  // per 100g raw (user's custom Cronometer entry)
+  tuna:     { kcal: 101,  p: 23,   c: 0,    f: 1    },  // skipjack chunks in brine, per 100g drained
   pasta:    { kcal: 186,  p: 12.3, c: 31.1, f: 0.7 },   // per 100g cooked
   broccoli: { kcal: 40.6, p: 2.8,  c: 7,    f: 0.4 },   // per 100g
   egg:      { kcal: 77.5, p: 6.3,  c: 0.4,  f: 4.8 },   // per 1 large egg (unit)
@@ -179,97 +179,110 @@ const FOODS = {
   preWO:    { kcal: 32,   p: 0,    c: 8,    f: 0   },   // per 1 scoop
 };
 
-/* Portion sizes per protein source and day type.
-   These map directly to the on-screen meal item strings. */
-const PORTIONS = {
-  workout: {
-    thigh:  { grams: 180, cooked: 130, label: "130g chicken boneless thighs (cooked)", targetEggs: 0 },
-    breast: { grams: 90,  cooked: 68,  label: "68g chicken breast (cooked)",           targetEggs: 2 },
-  },
-  rest: {
-    thigh:  { grams: 180, cooked: 130, label: "130g chicken boneless thighs (cooked)", targetEggs: 0 },
-    breast: { grams: 90,  cooked: 68,  label: "68g chicken breast (cooked)",           targetEggs: 2 },
-  },
+/* Tuna tin: 56g drained */
+const TUNA_DRAINED_G = 56;
+
+/* Chicken breast portion. Raw 90g shrinks to ~68g cooked. */
+const BREAST = {
+  rawG: 90,
+  cookedG: 68,
+  label: "68g chicken breast (cooked)",
 };
 
-const loadProtein = () => {
-  try { return localStorage.getItem("nutritimer-protein") || "thigh"; }
-  catch { return "thigh"; }
-};
-const saveProtein = (v) => {
-  try { localStorage.setItem("nutritimer-protein", v); } catch {}
+/* Determine which meals get eggs.
+   Rule: FIRST meal-type gets 2 eggs, LAST meal-type gets 4 eggs.
+   This concentrates more fat in the last meal for overnight MPS
+   and keeps the first meal lighter for a faster return to the
+   fat-burning trough between meals 1 and 2. Total 6 eggs/day. */
+const getMealEggs = (events, eventId) => {
+  const meals = events.filter(e => e.type === "meal");
+  if (meals.length === 0) return 0;
+  const firstId = meals[0].id;
+  const lastId = meals[meals.length - 1].id;
+  if (eventId === lastId) return 4;
+  if (eventId === firstId) return 2;
+  return 0;
 };
 
-/* Transform a meal's items list according to protein + day type.
-   Swaps the chicken line and injects an extra egg in breast mode. */
-const applyProtein = (items, protein, rest) => {
-  const portion = rest ? PORTIONS.rest[protein] : PORTIONS.workout[protein];
-  const out = [];
-  let chickenSwapped = false;
+/* Transform a meal's items list:
+   1. Swap the chicken line to either the breast portion label OR tuna
+      (if the meal is flagged as a tuna meal)
+   2. Strip any existing egg lines (templates may have legacy eggs)
+   3. If this meal is flagged for eggs, append the right number of eggs */
+const transformMealItems = (items, eggCount, useTuna) => {
+  let out = [];
+  let proteinSwapped = false;
   for (const item of items) {
-    if (/chicken/i.test(item) && !chickenSwapped) {
-      out.push(portion.label);
-      chickenSwapped = true;
+    if (/chicken|tuna/i.test(item) && !proteinSwapped) {
+      out.push(useTuna ? `1 tin skipjack tuna in brine (${TUNA_DRAINED_G}g drained)` : BREAST.label);
+      proteinSwapped = true;
+    } else if (/whole egg/i.test(item)) {
+      continue;
     } else {
       out.push(item);
     }
   }
-  // In breast mode every meal should have `targetEggs` eggs total
-  // to recover the fat lost from switching off thighs.
-  if (portion.targetEggs > 0) {
-    const eggIdx = out.findIndex(x => /whole egg/i.test(x));
-    const eggLine = portion.targetEggs === 1 ? "1 whole egg" : `${portion.targetEggs} whole eggs`;
-    if (eggIdx >= 0) {
-      out[eggIdx] = eggLine;
-    } else {
-      out.push(eggLine);
-    }
+  if (eggCount > 0) {
+    out.push(eggCount === 1 ? "1 whole egg" : `${eggCount} whole eggs`);
   }
   return out;
 };
 
-/* Compute total macros for a day given events + protein selection. */
-const computeDayMacros = (events, protein, rest) => {
-  const portion = rest ? PORTIONS.rest[protein] : PORTIONS.workout[protein];
-  const food = FOODS[protein];
+/* Compute macros for a single meal's transformed item list. */
+const computeItemsMacros = (items) => {
   let kcal = 0, p = 0, c = 0, f = 0;
-
-  events.forEach(ev => {
-    if (ev.type !== "meal") return;
-    const items = applyProtein(ev.items, protein, rest);
-    items.forEach(line => {
-      const addFood = (key, grams) => {
-        kcal += FOODS[key].kcal * grams / 100;
-        p    += FOODS[key].p    * grams / 100;
-        c    += FOODS[key].c    * grams / 100;
-        f    += FOODS[key].f    * grams / 100;
-      };
-      const addUnit = (key, units) => {
-        kcal += FOODS[key].kcal * units;
-        p    += FOODS[key].p    * units;
-        c    += FOODS[key].c    * units;
-        f    += FOODS[key].f    * units;
-      };
-      // chicken (current portion)
-      if (/chicken/i.test(line)) {
-        addFood(protein, portion.grams);
-      } else if (/pasta/i.test(line)) {
-        const m = line.match(/(\d+)g/);
-        if (m) addFood("pasta", parseInt(m[1]));
-      } else if (/broccoli/i.test(line)) {
-        const m = line.match(/(\d+)g/);
-        if (m) addFood("broccoli", parseInt(m[1]));
-      } else if (/egg/i.test(line)) {
-        const m = line.match(/^(\d+)/);
-        addUnit("egg", m ? parseInt(m[1]) : 1);
-      } else if (/banana/i.test(line)) {
-        addUnit("banana", 1);
-      } else if (/whey/i.test(line) && !/optional/i.test(line)) {
-        addUnit("whey", 1);
-      }
-    });
+  const addFood = (key, grams) => {
+    kcal += FOODS[key].kcal * grams / 100;
+    p    += FOODS[key].p    * grams / 100;
+    c    += FOODS[key].c    * grams / 100;
+    f    += FOODS[key].f    * grams / 100;
+  };
+  const addUnit = (key, units) => {
+    kcal += FOODS[key].kcal * units;
+    p    += FOODS[key].p    * units;
+    c    += FOODS[key].c    * units;
+    f    += FOODS[key].f    * units;
+  };
+  items.forEach(line => {
+    if (/tuna/i.test(line)) {
+      addFood("tuna", TUNA_DRAINED_G);
+    } else if (/chicken/i.test(line)) {
+      addFood("breast", BREAST.rawG);
+    } else if (/pasta/i.test(line)) {
+      const m = line.match(/(\d+)g/);
+      if (m) addFood("pasta", parseInt(m[1]));
+    } else if (/broccoli/i.test(line)) {
+      const m = line.match(/(\d+)g/);
+      if (m) addFood("broccoli", parseInt(m[1]));
+    } else if (/whole egg/i.test(line)) {
+      const m = line.match(/^(\d+)/);
+      addUnit("egg", m ? parseInt(m[1]) : 1);
+    } else if (/banana/i.test(line)) {
+      addUnit("banana", 1);
+    } else if (/whey/i.test(line) && !/optional/i.test(line)) {
+      addUnit("whey", 1);
+    } else if (/pre-?workout/i.test(line)) {
+      addUnit("preWO", 1);
+    }
   });
+  return {
+    kcal: Math.round(kcal),
+    p: Math.round(p * 10) / 10,
+    c: Math.round(c * 10) / 10,
+    f: Math.round(f * 10) / 10,
+  };
+};
 
+/* Compute total macros for a day given its event list. */
+const computeDayMacros = (events) => {
+  let kcal = 0, p = 0, c = 0, f = 0;
+  events.forEach(ev => {
+    if (ev.type !== "meal" && ev.type !== "fuel") return;
+    const eggs = ev.type === "meal" ? getMealEggs(events, ev.id) : 0;
+    const items = transformMealItems(ev.items, eggs, ev.useTuna);
+    const m = computeItemsMacros(items);
+    kcal += m.kcal; p += m.p; c += m.c; f += m.f;
+  });
   return {
     kcal: Math.round(kcal),
     p: Math.round(p),
@@ -308,7 +321,7 @@ const MEAL_CARB = {
   id: "carb", label: "MEAL", type: "meal",
   tag: "CARB + PROTEIN",
   items: [
-    "130g chicken boneless thighs (cooked)",
+    "chicken breast",
     "70g red lentil pasta",
     "80g broccoli",
   ],
@@ -316,20 +329,25 @@ const MEAL_CARB = {
   supplements: [],
 };
 
-/* Pre-gym carb meal — same as MEAL_CARB but with banana for fast-acting glucose.
-   Must be eaten 1.5+ hours before gym for digestion. The banana peaks ~30min,
-   the pasta sustains through the session. */
+/* Pre-gym meal — 1 tin tuna + 1 egg + pasta + broccoli, 90 minutes
+   before training. Tuna digests ~20% faster than chicken breast and
+   delivers a cleaner amino acid spike with less gastric load heading
+   into the gym. The egg compensates for tuna's lower protein and adds
+   a small amount of fat for satiety. Banana + pre-workout is a SEPARATE
+   event 30 min later (60 min before gym). Mercury: 1 tin/workout day × 4
+   workout days = 4 tins/week, at the EFSA safe limit for skipjack. */
 const MEAL_PRE_GYM = {
   id: "pre-gym", label: "MEAL", type: "meal",
-  tag: "PRE-GYM · CARB + PROTEIN",
+  tag: "PRE-GYM · TUNA + CARBS",
+  useTuna: true,
   items: [
-    "130g chicken boneless thighs (cooked)",
+    "tuna",
+    "1 whole egg",
     "70g red lentil pasta",
-    "1 banana",
     "80g broccoli",
   ],
-  note: "Two-wave carb delivery: banana peaks ~30min for fast glucose, lentil pasta sustains through the session. Take your pre-workout 30min before gym. Do NOT skip the pasta — this is what fuels the workout.",
-  supplements: ["ON Pre-Workout — 30min before gym"],
+  note: "Tuna digests ~20% faster than chicken and leaves less in your stomach going into the gym. Egg compensates for tuna's slightly lower protein. Pasta tops off muscle glycogen. Eat 90 min before training. Banana + pre-workout follows 30 min later (60 min before gym). 1 tin only — mercury limit is 4 tins/week.",
+  supplements: [],
 };
 
 /* No-carb meal — chicken + broccoli only.
@@ -340,7 +358,7 @@ const MEAL_NOCARB = {
   id: "nocarb", label: "MEAL", type: "meal",
   tag: "PROTEIN + FAT · NO CARBS",
   items: [
-    "130g chicken boneless thighs (cooked)",
+    "chicken breast",
     "80g broccoli",
   ],
   note: "No carbs = low insulin = fat oxidation mode. Chicken's 6.2g fat per 100g provides fat naturally — no olive oil needed. Simple.",
@@ -354,12 +372,11 @@ const MEAL_LAST = {
   id: "last", label: "MEAL", type: "meal",
   tag: "PROTEIN + FAT · LAST MEAL",
   items: [
-    "130g chicken boneless thighs (cooked)",
-    "1 whole egg",
+    "chicken breast",
     "80g broccoli",
-    "Whey protein shake (optional — if needed for protein target)",
+    "Whey protein shake — 2 scoops",
   ],
-  note: "Egg adds 6.3g protein + 4.8g fat to push daily fat above the 40g hormone floor. Low insulin going into sleep maximises overnight GH release and fat oxidation. Chicken + egg = slow-digesting protein feeds muscles overnight.",
+  note: "Last meal of the day. 4 eggs (added by the meal transform) push fat above the hormone floor and extend overnight protein delivery. Whey gives a fast amino spike. Low insulin going into sleep maximises overnight GH release and fat oxidation. Chicken + eggs = slow-digesting protein feeds muscles overnight.",
   supplements: ["Omega-3 — 1 capsule (fat present aids absorption)"],
 };
 
@@ -373,6 +390,20 @@ const MEAL_FUEL = {
   ],
   note: "Minimal digestion time — banana glucose peaks in ~20min. This is NOT a full meal. Take your pre-workout at 07:30. Morning gym means no fasted walk today — the gym IS the exercise.",
   supplements: ["ON Pre-Workout — take at 07:30"],
+};
+
+/* Banana + pre-workout — sits 60 minutes before the gym session.
+   Separate event so the physiology chart can model the two-wave
+   carb delivery accurately and you can't forget it. */
+const BANANA_FUEL = {
+  id: "banana-fuel", label: "BANANA + PRE", type: "fuel",
+  tag: "60 MIN BEFORE GYM",
+  items: [
+    "1 banana",
+    "1 scoop ON Pre-Workout",
+  ],
+  note: "Take exactly 60 min before training. Banana glucose peaks in ~30 min then is absorbed into muscle glycogen; by the time you start lifting, blood sugar is stable and glycogen is topped off. Caffeine from the pre-workout peaks at 45-60 min, hitting your first working set.",
+  supplements: [],
 };
 
 /* Gym event — same across all presets, just different time slots */
@@ -401,46 +432,27 @@ const makeGym = (carbMeals) => ({
    ---------------------------------------------------------------- */
 
 const PRESETS = {
-  morning: {
-    id: "morning",
-    label: "MORNING",
-    gymTime: "08:00",
-    desc: "Gym at 08:00 · Banana only pre-gym · No fasted walk",
-    /* Morning is the toughest for carb loading — only a banana before
-       the session. All 3 pasta meals come AFTER the gym for recovery
-       and restocking glycogen for the next day. The tradeoff: less fuel
-       for this session, but the workout still works with overnight
-       glycogen + banana. Best for lighter training days.
-       EXCEPTION: meal 1 at 10:00 instead of 08:30 — you're in the gym. */
+  afternoon: {
+    id: "afternoon",
+    label: "AFTERNOON",
+    gymTime: "15:15",
+    desc: "Gym at 15:15 · On-call friendly · Eat at desk",
+    /* Afternoon is designed for on-call days where the user can't leave
+       the laptop until 15:00. Meal 2 shifts to 11:30 so meal 3 can fit
+       at 13:45 (90 min before gym) without compressing the 2→3 gap below
+       2 hours. Banana + pre-workout at 14:15 (60 min before gym). Gym at
+       15:15 means caffeine peaks during the first working set. Meal 4
+       stays at 20:30 — gives a solid 4h post-workout window for adrenergic
+       settle before sleep. */
     events: [
-      { ...MEAL_FUEL, time: "06:30", endTime: "07:30" },
-      { ...makeGym(0), time: "08:00", endTime: "09:30" },
-      { ...MEAL_CARB,    time: "10:00", endTime: "12:30", id: "carb-1", label: "MEAL 1",
-        tag: "POST-WORKOUT · CARB + PROTEIN",
-        note: "Post-workout GLUT4 elevation — carbs shuttle straight to muscle glycogen. This is your biggest meal. Eat all the broccoli you want." },
-      { ...MEAL_CARB,    time: "12:30", endTime: "16:30", id: "carb-2", label: "MEAL 2" },
-      { ...MEAL_CARB,    time: "16:30", endTime: "20:30", id: "carb-3", label: "MEAL 3" },
-      { ...MEAL_LAST,    time: "20:30", endTime: "22:30", label: "MEAL 4" },
-    ],
-  },
-
-  midday: {
-    id: "midday",
-    label: "MIDDAY",
-    gymTime: "14:00",
-    desc: "Gym at 14:00 · 2 carb meals before · Best balance",
-    /* Midday is the sweet spot — two full pasta meals digested before
-       the session. One more pasta meal post-workout for recovery.
-       Last meal is chicken + egg, no carbs.
-       Fixed meal times: 08:30, 12:30, 16:30, 20:30. */
-    events: [
-      { ...MEAL_CARB,    time: "08:30", endTime: "12:30", id: "carb-1", label: "MEAL 1" },
-      { ...MEAL_PRE_GYM, time: "12:30", endTime: "13:30", label: "MEAL 2" },
-      { ...makeGym(2), time: "14:00", endTime: "15:30" },
-      { ...MEAL_CARB,    time: "16:30", endTime: "20:30", id: "carb-3", label: "MEAL 3",
-        tag: "POST-WORKOUT · CARB + PROTEIN",
-        note: "Post-workout GLUT4 elevation — carbs go straight to muscle glycogen recovery. Lentil pasta's slower digestion is ideal here, no urgency." },
-      { ...MEAL_LAST,    time: "20:30", endTime: "22:30", label: "MEAL 4" },
+      { ...MEAL_CARB,    time: "08:30", endTime: "11:30", id: "carb-1", label: "MEAL 1" },
+      { ...MEAL_CARB,    time: "11:30", endTime: "13:45", id: "carb-2", label: "MEAL 2" },
+      { ...MEAL_PRE_GYM, time: "13:45", endTime: "14:15", label: "MEAL 3" },
+      { ...BANANA_FUEL,  time: "14:15", endTime: "15:15" },
+      { ...makeGym(3),   time: "15:15", endTime: "16:35" },
+      { ...MEAL_LAST,    time: "20:30", endTime: "22:30", label: "MEAL 4",
+        tag: "POST-WORKOUT · PROTEIN + FAT",
+        note: "4 hours after gym — adrenergic state has fully settled, muscles have been in recovery mode all afternoon. Chicken + eggs + whey provides protein for overnight recovery. Eggs push fat above the hormone floor. No carbs — you had plenty pre-gym. Sleep by 22:30 for GH release." },
     ],
   },
 
@@ -448,18 +460,19 @@ const PRESETS = {
     id: "evening",
     label: "EVENING",
     gymTime: "18:00",
-    desc: "Gym at 18:00 · 3 carb meals · Maximum fuel · Default",
-    /* Evening is the default and highest-performance option — three pasta
-       meals throughout the day means glycogen is fully stocked. The tradeoff
+    desc: "Gym at 18:00 · 3 carb meals · Maximum fuel",
+    /* Evening is the highest-performance option — three pasta meals
+       throughout the day means glycogen is fully stocked. The tradeoff
        is a late post-workout dinner at 20:30 with no carbs. */
     events: [
       { ...MEAL_CARB,    time: "08:30", endTime: "12:30", id: "carb-1", label: "MEAL 1" },
       { ...MEAL_CARB,    time: "12:30", endTime: "16:30", id: "carb-2", label: "MEAL 2" },
-      { ...MEAL_PRE_GYM, time: "16:30", endTime: "17:30", label: "MEAL 3" },
-      { ...makeGym(3), time: "18:00", endTime: "19:30" },
+      { ...MEAL_PRE_GYM, time: "16:30", endTime: "17:00", label: "MEAL 3" },
+      { ...BANANA_FUEL,  time: "17:00", endTime: "18:00" },
+      { ...makeGym(3),   time: "18:00", endTime: "19:30" },
       { ...MEAL_LAST,    time: "20:30", endTime: "22:30", label: "MEAL 4",
         tag: "POST-WORKOUT · PROTEIN + FAT",
-        note: "Post-workout GLUT4 still elevated. Chicken + egg provides protein for recovery. The egg's 4.8g fat pushes daily total above the 40g hormone floor. No carbs — you've had 150g already today. Sleep by 22:30 for GH release." },
+        note: "Post-workout GLUT4 still elevated. Chicken + eggs + whey provides protein for overnight recovery. Eggs push fat above the hormone floor. No carbs — you've had plenty already today. Sleep by 22:30 for GH release." },
     ],
   },
 };
@@ -484,7 +497,7 @@ const REST_EVENTS = [
     tag: "LAST CARB MEAL TODAY",
     time: "08:30", endTime: "12:30",
     items: [
-      "130g chicken boneless thighs (cooked)",
+      "chicken breast",
       "70g red lentil pasta",
       "80g broccoli",
     ],
@@ -496,19 +509,18 @@ const REST_EVENTS = [
     tag: "NO CARBS",
     time: "12:30", endTime: "16:30",
     items: [
-      "130g chicken boneless thighs (cooked)",
-      "1 whole egg",
+      "chicken breast",
       "80g broccoli",
     ],
-    note: "Egg adds extra fat here — with no carbs present, there's no insulin spike to shuttle fat into storage. Fat goes to oxidation and hormone maintenance. Chicken + egg = 40g protein.",
-    supplements: ["Omega-3 — 1 capsule (fat present aids absorption)"],
+    note: "Lean middle meal. No carbs, no eggs. Insulin stays low — fat oxidation continues uninterrupted through the afternoon.",
+    supplements: ["Omega-3 — 1 capsule"],
   },
   {
     id: "rest-3", label: "MEAL 3", type: "meal",
     tag: "NO CARBS",
     time: "16:30", endTime: "20:30",
     items: [
-      "130g chicken boneless thighs (cooked)",
+      "chicken breast",
       "80g broccoli",
     ],
     note: "Simple. Chicken and broccoli. Fat oxidation continues. Stay hydrated.",
@@ -519,11 +531,11 @@ const REST_EVENTS = [
     tag: "NO CARBS · LAST MEAL",
     time: "20:30", endTime: "22:30",
     items: [
-      "130g chicken boneless thighs (cooked)",
-      "1 whole egg",
+      "chicken breast",
       "80g broccoli",
+      "Whey protein shake — 2 scoops",
     ],
-    note: "Low insulin going into sleep. Chicken provides slow-digesting protein for overnight muscle repair. Egg adds final fat contribution. Maximises overnight GH release and fat oxidation. Sleep by 22:30.",
+    note: "Low insulin going into sleep. Chicken provides slow-digesting protein for overnight muscle repair. Whey gives a fast amino spike, eggs (added by transform) provide overnight fat. Maximises overnight GH release and fat oxidation. Sleep by 22:30.",
     supplements: [],
   },
 ];
@@ -536,6 +548,38 @@ const REST_EVENTS = [
    Auto-expires at midnight — no stale overrides carrying forward.
    ---------------------------------------------------------------- */
 const isAutoRestDay = (d) => d.getDay() === 0 || d.getDay() === 4;
+
+/* Training split by day of week.
+   Mon=Push, Tue=Pull, Wed=Legs, Thu=Rest, Fri=Upper, Sat=Lower, Sun=Rest.
+   Matches on-call schedule: Mon-Fri afternoon preset, Sat evening preset. */
+const TRAINING_SPLIT = {
+  0: null,      // Sunday — rest
+  1: "PUSH",    // Monday
+  2: "PULL",    // Tuesday
+  3: "LEGS",    // Wednesday
+  4: null,      // Thursday — rest
+  5: "UPPER",   // Friday
+  6: "LOWER",   // Saturday
+};
+const SPLIT_ORDER = [1, 2, 3, 5, 6]; // Mon, Tue, Wed, Fri, Sat
+const getTrainingDayIndex = (d) => {
+  const day = d.getDay();
+  const idx = SPLIT_ORDER.indexOf(day);
+  return idx; // -1 if rest day
+};
+const getWeeklyProgress = (d) => {
+  // How many training days have already passed this week (including today if it's a training day)
+  const day = d.getDay();
+  // Week starts Monday. Count training days up to and including today.
+  let done = 0;
+  for (const sd of SPLIT_ORDER) {
+    // Monday=1..Sun=0. Convert Sunday(0) to 7 for week ordering.
+    const todayOrder = day === 0 ? 7 : day;
+    const sdOrder = sd === 0 ? 7 : sd;
+    if (sdOrder <= todayOrder) done++;
+  }
+  return { done, total: SPLIT_ORDER.length };
+};
 const todayKey = (d) => `${d.getFullYear()}-${padZ(d.getMonth()+1)}-${padZ(d.getDate())}`;
 
 const loadRestOverride = () => {
@@ -569,8 +613,11 @@ const formatCountdown = (diffMs) => {
 };
 
 const loadPreset = () => {
-  try { return localStorage.getItem("nutritimer-preset") || "evening"; }
-  catch { return "evening"; }
+  try {
+    const stored = localStorage.getItem("nutritimer-preset");
+    if (stored && (stored === "afternoon" || stored === "evening")) return stored;
+    return "evening";
+  } catch { return "evening"; }
 };
 const savePreset = (v) => {
   try { localStorage.setItem("nutritimer-preset", v); } catch {}
@@ -966,7 +1013,6 @@ function Dashboard() {
   const [preset, setPreset]   = useState(loadPreset);
   const [plenny, setPlenny]   = useState(loadSwaps);
   const [restOverride, setRestOverride] = useState(loadRestOverride);
-  const [protein, setProtein] = useState(loadProtein);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -976,14 +1022,6 @@ function Dashboard() {
   const selectPreset = useCallback((p) => {
     setPreset(p);
     savePreset(p);
-  }, []);
-
-  const toggleProtein = useCallback(() => {
-    setProtein(prev => {
-      const next = prev === "thigh" ? "breast" : "thigh";
-      saveProtein(next);
-      return next;
-    });
   }, []);
 
   const togglePlenny = useCallback((eventId) => {
@@ -1054,9 +1092,16 @@ function Dashboard() {
     const c = TYPE_COLORS[ev.type] || "#4ade80";
     const isSwapped = ev.type === "meal" && plenny[ev.id];
     const baseDisplay = isSwapped ? { ...PLENNY_PRO, id: ev.id, type: "meal", time: ev.time, endTime: ev.endTime } : ev;
-    const display = !isSwapped && ev.type === "meal"
-      ? { ...baseDisplay, items: applyProtein(baseDisplay.items, protein, rest) }
+    const eggCount = (!isSwapped && ev.type === "meal") ? getMealEggs(events, ev.id) : 0;
+    const transformedItems = !isSwapped && (ev.type === "meal" || ev.type === "fuel")
+      ? transformMealItems(baseDisplay.items, eggCount, ev.useTuna)
+      : baseDisplay.items;
+    const display = !isSwapped && (ev.type === "meal" || ev.type === "fuel")
+      ? { ...baseDisplay, items: transformedItems }
       : baseDisplay;
+    const mealMacros = (!isSwapped && (ev.type === "meal" || ev.type === "fuel"))
+      ? computeItemsMacros(transformedItems)
+      : null;
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -1087,15 +1132,20 @@ function Dashboard() {
           ))}
         </div>
 
-        {display.supplements && display.supplements.length > 0 && (
+        {mealMacros && (
           <div style={{
-            background: "#facc1511", border: "1px solid #facc1533",
-            borderRadius: "4px", padding: "10px 14px",
+            display: "flex", gap: "8px", flexWrap: "wrap",
+            padding: "8px 10px",
+            background: isCurrent ? c + "0c" : "#0a1020",
+            border: `1px solid ${isCurrent ? c + "22" : "#1e293b"}`,
+            borderRadius: "4px",
           }}>
-            <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#facc15", marginBottom: "6px" }}>SUPPLEMENTS</div>
-            {display.supplements.map((s, i) => (
-              <div key={i} style={{ fontSize: "12px", color: "#fde68a", lineHeight: "1.6" }}>· {s}</div>
-            ))}
+            <div style={{ fontSize: "10px", color: isCurrent ? c : "#475569", letterSpacing: "1px", fontWeight: "bold" }}>
+              {mealMacros.kcal} KCAL
+            </div>
+            <div style={{ fontSize: "10px", color: "#475569", letterSpacing: "0.5px" }}>
+              · {mealMacros.p}P / {mealMacros.c}C / {mealMacros.f}F
+            </div>
           </div>
         )}
 
@@ -1178,55 +1228,70 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* ═══ PROTEIN SOURCE TOGGLE ═══ */}
-      <div style={{ display: "flex", gap: "8px", alignItems: "stretch" }}>
-        <div style={{
-          flex: "0 0 auto",
-          padding: "9px 14px",
-          fontSize: "9px", letterSpacing: "2px", color: "#334155",
-          display: "flex", alignItems: "center",
-          borderRadius: "6px", border: "1px solid #0d1520",
-          background: "#0a1020",
-        }}>PROTEIN</div>
-        <div
-          className="tap-target"
-          onClick={toggleProtein}
-          style={{
-            flex: "1 1 0",
-            padding: "9px 14px", borderRadius: "6px",
-            background: protein === "thigh" ? "#4ade8018" : "#0d1520",
-            border: `1px solid ${protein === "thigh" ? "#4ade8066" : "#1e293b"}`,
-            display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px",
-          }}
-        >
+      {/* ═══ SPLIT INDICATOR + WEEKLY PROGRESS ═══ */}
+      {(() => {
+        const split = TRAINING_SPLIT[now.getDay()];
+        const progress = getWeeklyProgress(now);
+        return (
           <div style={{
-            fontSize: "12px", fontWeight: "bold", letterSpacing: "2px",
-            color: protein === "thigh" ? "#4ade80" : "#475569",
-          }}>THIGHS</div>
-          <div style={{ fontSize: "9px", color: protein === "thigh" ? "#4ade8099" : "#334155" }}>
-            {(rest ? PORTIONS.rest.thigh.cooked : PORTIONS.workout.thigh.cooked)}g cooked × meal
+            display: "flex", gap: "8px", alignItems: "stretch",
+          }}>
+            <div style={{
+              flex: "2 1 0",
+              padding: "10px 14px", borderRadius: "6px",
+              background: split ? "#4ade8018" : "#1a2a3a",
+              border: `1px solid ${split ? "#4ade8066" : "#1e3a5f"}`,
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+            }}>
+              <div>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#334155" }}>TODAY</div>
+                <div style={{
+                  fontSize: "18px", fontWeight: "bold", letterSpacing: "3px",
+                  color: split ? "#4ade80" : "#60a5fa",
+                  marginTop: "2px",
+                }}>{split || "REST"}</div>
+              </div>
+              <div style={{
+                fontSize: "9px", letterSpacing: "1px", color: "#475569",
+                textAlign: "right",
+              }}>
+                {split ? "TRAINING DAY" : "RECOVERY"}
+              </div>
+            </div>
+            <div style={{
+              flex: "1 1 0",
+              padding: "10px 14px", borderRadius: "6px",
+              background: "#0d1520",
+              border: "1px solid #1e293b",
+              display: "flex", flexDirection: "column", justifyContent: "center",
+            }}>
+              <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#334155" }}>THIS WEEK</div>
+              <div style={{
+                display: "flex", gap: "4px", marginTop: "6px", alignItems: "center",
+              }}>
+                {SPLIT_ORDER.map((dayNum, i) => {
+                  const label = TRAINING_SPLIT[dayNum];
+                  const isDone = i < progress.done - (split ? 1 : 0);
+                  const isToday = dayNum === now.getDay();
+                  return (
+                    <div key={dayNum} style={{
+                      flex: "1 1 0",
+                      height: "6px", borderRadius: "1px",
+                      background: isToday ? "#4ade80" : (isDone ? "#4ade8055" : "#1e293b"),
+                    }} title={label}/>
+                  );
+                })}
+              </div>
+              <div style={{
+                fontSize: "10px", color: "#475569",
+                marginTop: "5px", letterSpacing: "0.5px",
+              }}>
+                {progress.done} / {progress.total}
+              </div>
+            </div>
           </div>
-        </div>
-        <div
-          className="tap-target"
-          onClick={toggleProtein}
-          style={{
-            flex: "1 1 0",
-            padding: "9px 14px", borderRadius: "6px",
-            background: protein === "breast" ? "#4ade8018" : "#0d1520",
-            border: `1px solid ${protein === "breast" ? "#4ade8066" : "#1e293b"}`,
-            display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px",
-          }}
-        >
-          <div style={{
-            fontSize: "12px", fontWeight: "bold", letterSpacing: "2px",
-            color: protein === "breast" ? "#4ade80" : "#475569",
-          }}>BREAST</div>
-          <div style={{ fontSize: "9px", color: protein === "breast" ? "#4ade8099" : "#334155" }}>
-            {(rest ? PORTIONS.rest.breast.cooked : PORTIONS.workout.breast.cooked)}g cooked + 2 eggs
-          </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* ═══ WORKOUT PRESET SELECTOR ═══ */}
       {!rest && (
@@ -1408,7 +1473,7 @@ function Dashboard() {
 
       {/* ═══ FOOTER ═══ */}
       {(() => {
-        const macros = computeDayMacros(events, protein, rest);
+        const macros = computeDayMacros(events);
         return (
           <div style={{
             display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -1418,7 +1483,7 @@ function Dashboard() {
               TARGET · {macros.kcal} KCAL · {macros.p}P / {macros.c}C / {macros.f}F · 4L WATER
             </div>
             <div style={{ fontSize: "9px", color: "#1e293b", letterSpacing: "1px" }}>
-              {protein.toUpperCase()} · {rest ? "REST" : "WORKOUT"} · GOAL 68 KG
+              {rest ? "REST" : "WORKOUT"} · GOAL 68 KG
             </div>
           </div>
         );
@@ -1432,6 +1497,9 @@ function Dashboard() {
    ================================================================ */
 function ScheduleList({ events, currentEvent, plenny, togglePlenny, rest }) {
   const [expanded, setExpanded] = useState(false);
+  const [expandedItem, setExpandedItem] = useState(null);
+
+  const toggleItem = (id) => setExpandedItem(prev => prev === id ? null : id);
 
   return (
     <div style={{
@@ -1458,45 +1526,110 @@ function ScheduleList({ events, currentEvent, plenny, togglePlenny, rest }) {
             const c = TYPE_COLORS[ev.type] || "#4ade80";
             const isCurr = currentEvent?.id === ev.id;
             const isSwapped = ev.type === "meal" && plenny[ev.id];
+            const isItemExpanded = expandedItem === ev.id;
+            const eggCount = (!isSwapped && ev.type === "meal") ? getMealEggs(events, ev.id) : 0;
+            const transformedItems = ev.type === "meal" && !isSwapped
+              ? transformMealItems(ev.items, eggCount, ev.useTuna)
+              : ev.items;
+            const macros = ev.type === "meal" && !isSwapped
+              ? computeItemsMacros(transformedItems)
+              : null;
             return (
               <div key={ev.id} style={{
-                display: "flex", alignItems: "center", gap: "10px",
-                padding: "8px 10px", borderRadius: "4px",
-                background: isCurr ? c + "15" : "transparent",
-                border: isCurr ? `1px solid ${c}33` : "1px solid transparent",
+                borderRadius: "4px",
+                background: isCurr ? c + "15" : (isItemExpanded ? "#0a1020" : "transparent"),
+                border: isCurr ? `1px solid ${c}33` : (isItemExpanded ? "1px solid #1e293b" : "1px solid transparent"),
               }}>
-                <div style={{
-                  fontSize: "11px", color: isCurr ? c : "#475569",
-                  fontVariantNumeric: "tabular-nums", minWidth: "42px",
-                  fontWeight: isCurr ? "bold" : "normal",
-                }}>{ev.time}</div>
-                <div style={{
-                  width: "6px", height: "6px", borderRadius: "50%",
-                  background: isCurr ? c : c + "66", flexShrink: 0,
-                }}/>
-                <div style={{
-                  flex: 1, fontSize: "12px",
-                  color: isCurr ? "#e2e8f0" : "#64748b",
-                  fontWeight: isCurr ? "bold" : "normal",
-                }}>
-                  {isSwapped ? "PLENNY PRO" : ev.label}
-                  {ev.tag && !isSwapped && (
-                    <span style={{ fontSize: "9px", color: "#334155", marginLeft: "8px" }}>{ev.tag}</span>
+                <div
+                  className="tap-target"
+                  onClick={() => toggleItem(ev.id)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "10px",
+                    padding: "8px 10px",
+                  }}
+                >
+                  <div style={{
+                    fontSize: "11px", color: isCurr ? c : "#475569",
+                    fontVariantNumeric: "tabular-nums", minWidth: "42px",
+                    fontWeight: isCurr ? "bold" : "normal",
+                  }}>{ev.time}</div>
+                  <div style={{
+                    width: "6px", height: "6px", borderRadius: "50%",
+                    background: isCurr ? c : c + "66", flexShrink: 0,
+                  }}/>
+                  <div style={{
+                    flex: 1, fontSize: "12px",
+                    color: isCurr ? "#e2e8f0" : "#64748b",
+                    fontWeight: isCurr ? "bold" : "normal",
+                  }}>
+                    {isSwapped ? "PLENNY PRO" : ev.label}
+                    {ev.tag && !isSwapped && (
+                      <span style={{ fontSize: "9px", color: "#334155", marginLeft: "8px" }}>{ev.tag}</span>
+                    )}
+                  </div>
+                  {macros && !isItemExpanded && (
+                    <div style={{
+                      fontSize: "9px", color: "#475569", letterSpacing: "0.5px",
+                      fontVariantNumeric: "tabular-nums",
+                    }}>
+                      {macros.kcal} kcal
+                    </div>
                   )}
+                  {ev.type === "meal" && (
+                    <div
+                      className="tap-target"
+                      onClick={(e) => { e.stopPropagation(); togglePlenny(ev.id); }}
+                      style={{
+                        padding: "4px 8px", borderRadius: "3px",
+                        fontSize: "9px", letterSpacing: "0.5px",
+                        background: isSwapped ? "#fb923c22" : "#1e293b44",
+                        color: isSwapped ? "#fb923c" : "#334155",
+                        border: `1px solid ${isSwapped ? "#fb923c44" : "#1e293b"}`,
+                      }}
+                    >
+                      {isSwapped ? "UNDO" : "⚡PP"}
+                    </div>
+                  )}
+                  <div style={{ fontSize: "10px", color: "#334155", marginLeft: "2px" }}>
+                    {isItemExpanded ? "▲" : "▼"}
+                  </div>
                 </div>
-                {ev.type === "meal" && (
-                  <div
-                    className="tap-target"
-                    onClick={(e) => { e.stopPropagation(); togglePlenny(ev.id); }}
-                    style={{
-                      padding: "4px 8px", borderRadius: "3px",
-                      fontSize: "9px", letterSpacing: "0.5px",
-                      background: isSwapped ? "#fb923c22" : "#1e293b44",
-                      color: isSwapped ? "#fb923c" : "#334155",
-                      border: `1px solid ${isSwapped ? "#fb923c44" : "#1e293b"}`,
-                    }}
-                  >
-                    {isSwapped ? "UNDO" : "⚡PP"}
+
+                {isItemExpanded && (
+                  <div style={{
+                    padding: "4px 14px 12px 52px",
+                    display: "flex", flexDirection: "column", gap: "5px",
+                  }}>
+                    {transformedItems.map((item, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "6px" }}>
+                        <span style={{ color: c + "88", flexShrink: 0, fontSize: "11px" }}>›</span>
+                        <span style={{ fontSize: "11px", color: "#94a3b8", lineHeight: "1.4" }}>{item}</span>
+                      </div>
+                    ))}
+                    {macros && (
+                      <div style={{
+                        marginTop: "6px", padding: "6px 10px",
+                        background: "#0a1020", border: "1px solid #1e293b",
+                        borderRadius: "3px",
+                        display: "flex", gap: "10px", flexWrap: "wrap",
+                        fontSize: "10px", letterSpacing: "0.5px",
+                        fontVariantNumeric: "tabular-nums",
+                      }}>
+                        <span style={{ color: c, fontWeight: "bold" }}>{macros.kcal} KCAL</span>
+                        <span style={{ color: "#475569" }}>{macros.p}P</span>
+                        <span style={{ color: "#475569" }}>{macros.c}C</span>
+                        <span style={{ color: "#475569" }}>{macros.f}F</span>
+                      </div>
+                    )}
+                    {ev.note && (
+                      <div style={{
+                        marginTop: "6px", fontSize: "10px",
+                        color: "#475569", lineHeight: "1.5",
+                        fontStyle: "italic",
+                      }}>
+                        {ev.note}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
