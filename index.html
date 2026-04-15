@@ -88,15 +88,15 @@
 
    WORKOUT PRESETS:
    - AFTERNOON (gym 15:15) — Mon-Fri, on-call days. Meals at 08:30,
-     12:00, 13:45, 14:35 (banana+pre), 17:00 (post-gym shake), 20:30.
-     Tuna in meal 3.
+     12:00, 13:45, 14:45 (banana+pre+whey, 30 min pre-gym), 17:00
+     (post-gym shake), 20:30. Tuna in meal 3.
    - EVENING (gym 18:00) — Saturday only. Meals at 08:30, 12:30, 16:30,
-     17:20 (banana+pre), 19:45 (post-gym shake), 20:30. Chicken in
-     meal 3 (mercury cap).
+     17:30 (banana+pre+whey, 30 min pre-gym), 19:45 (post-gym shake),
+     20:30. Chicken in meal 3 (mercury cap).
 
    PORTIONS — identical per meal:
    - 90g chicken breast (cooked) per chicken meal
-   - 56g tuna (1 tin drained) + 1 egg per pre-gym tuna meal (Mon-Fri)
+   - 102g tuna (1 whole tin drained) per pre-gym tuna meal (Mon-Fri)
    - 70g cooked red lentil pasta per pasta meal
    - 80g broccoli per meal
    - 2 eggs in meal 1, 4 eggs in meal 4
@@ -142,8 +142,8 @@ const FOODS = {
   preWO:    { kcal: 5,    p: 0,    c: 0,    f: 0   },   // Body Fuel stim-free, per scoop (negligible)
 };
 
-/* Tuna tin: 56g drained */
-const TUNA_DRAINED_G = 56;
+/* Tuna tin: whole tin = ~102g drained (user's brand, label verified 2026-04-15) */
+const TUNA_DRAINED_G = 102;
 
 /* Chicken breast portion. The user's Cronometer custom entry is for
    COOKED chicken breast at 110 kcal / 24.7P / 0.1C / 1.18F per 100g.
@@ -179,7 +179,7 @@ const transformMealItems = (items, eggCount, useTuna) => {
   let proteinSwapped = false;
   for (const item of items) {
     if (/chicken|tuna/i.test(item) && !proteinSwapped) {
-      out.push(useTuna ? `1 tin skipjack tuna in brine (${TUNA_DRAINED_G}g drained)` : BREAST.label);
+      out.push(useTuna ? `1 whole tin skipjack tuna in brine (${TUNA_DRAINED_G}g drained)` : BREAST.label);
       proteinSwapped = true;
     } else if (/whole egg/i.test(item)) {
       continue;
@@ -310,10 +310,8 @@ const MEAL_PRE_GYM = {
   items: [
     "tuna",
     "70g red lentil pasta",
-    "80g broccoli",
-    "1 scoop whey (pre-gym boost)",
   ],
-  note: "Tuna + whey gives the fastest pre-gym amino delivery possible. Both are low-fat so gastric emptying is quick — your stomach is essentially empty by the time you train. Pasta tops off muscle glycogen. Eat 90 min before training. Banana + Body Fuel follows 50 min later (40 min before gym).",
+  note: "Pre-gym solid food: tuna + pasta only. Tuna delivers clean fast-digesting protein with ~0.6g fat so gastric emptying is quick. Pasta tops off muscle glycogen. Eat 90 min before training — by gym time your stomach is essentially empty. No broccoli here (saves fibre volume at the bell). Whey is in the banana+fuel slot 60 min later, where it peaks during the session instead of before it.",
   supplements: [],
 };
 
@@ -369,13 +367,14 @@ const POST_GYM_SHAKE = {
    isn't required — citrulline peaks at ~60 min, banana glucose at ~30
    min, so 40 min splits the difference. */
 const BANANA_FUEL = {
-  id: "banana-fuel", label: "BANANA + PRE", type: "fuel",
-  tag: "40 MIN BEFORE GYM",
+  id: "banana-fuel", label: "BANANA + PRE + WHEY", type: "fuel",
+  tag: "30 MIN BEFORE GYM",
   items: [
-    "1 banana",
     "1 scoop Body Fuel (stim-free)",
+    "1 scoop whey",
+    "1 banana",
   ],
-  note: "Take ~40 min before training. Banana glucose peaks ~30 min then is absorbed into muscle glycogen. Citrulline (8g) peaks at the start of training and increases blood flow + reduces perceived exertion. No caffeine = no sleep impact at 22:30 bedtime, no cortisol spike on top of on-call stress.",
+  note: "Liquid stack 30 min before training. Order: drink Body Fuel + whey shake first, eat banana after. Banana glucose peaks ~30 min — right as you start lifting. Whey (fast) peaks ~30-45 min, covering early-session amino demand. Citrulline (8g) peaks ~60 min in, raising blood flow and dropping perceived exertion mid-session. Beta-alanine works chronically, not acutely — tingle is cosmetic. No caffeine = no 22:30 sleep disruption.",
   supplements: [],
 };
 
@@ -423,8 +422,8 @@ const PRESETS = {
     events: [
       { ...MEAL_CARB,        time: "08:30", endTime: "12:00", id: "carb-1", label: "MEAL 1" },
       { ...MEAL_CARB,        time: "12:00", endTime: "13:45", id: "carb-2", label: "MEAL 2" },
-      { ...MEAL_PRE_GYM,     time: "13:45", endTime: "14:35", label: "MEAL 3" },
-      { ...BANANA_FUEL,      time: "14:35", endTime: "15:15" },
+      { ...MEAL_PRE_GYM,     time: "13:45", endTime: "14:45", label: "MEAL 3" },
+      { ...BANANA_FUEL,      time: "14:45", endTime: "15:15" },
       { ...makeGym(3),       time: "15:15", endTime: "16:35" },
       { ...POST_GYM_SHAKE,   time: "17:00", endTime: "17:30" },
       { ...MEAL_LAST,        time: "20:30", endTime: "22:30", label: "MEAL 4",
@@ -446,11 +445,11 @@ const PRESETS = {
     events: [
       { ...MEAL_CARB,        time: "08:30", endTime: "12:30", id: "carb-1", label: "MEAL 1" },
       { ...MEAL_CARB,        time: "12:30", endTime: "16:30", id: "carb-2", label: "MEAL 2" },
-      { ...MEAL_PRE_GYM,     time: "16:30", endTime: "17:20", label: "MEAL 3", useTuna: false,
+      { ...MEAL_PRE_GYM,     time: "16:30", endTime: "17:30", label: "MEAL 3", useTuna: false,
         tag: "PRE-GYM · CHICKEN + CARBS",
-        items: ["chicken", "70g red lentil pasta", "80g broccoli", "1 scoop whey (pre-gym boost)"],
-        note: "Saturday uses chicken instead of tuna (mercury cap: 4 tins/week, used Mon-Fri). Whey scoop matches the weekday pre-gym macros. Pasta tops off muscle glycogen. Eat 90 min before training." },
-      { ...BANANA_FUEL,      time: "17:20", endTime: "18:00" },
+        items: ["chicken", "70g red lentil pasta"],
+        note: "Saturday uses chicken instead of tuna (mercury cap: 4 tins/week, used Mon-Fri). Pasta tops off muscle glycogen. Eat 90 min before training. Whey is in the banana+fuel slot 60 min later." },
+      { ...BANANA_FUEL,      time: "17:30", endTime: "18:00" },
       { ...makeGym(3),       time: "18:00", endTime: "19:30" },
       { ...POST_GYM_SHAKE,   time: "19:45", endTime: "20:15" },
       { ...MEAL_LAST,        time: "20:30", endTime: "22:30", label: "MEAL 4",
