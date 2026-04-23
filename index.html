@@ -34,9 +34,9 @@
    NUTRITIMER — MEAL TIMING DASHBOARD
    ================================================================
    PURPOSE:
-   Real-time dashboard that tells the user exactly what to eat and when,
-   based on their workout schedule for the day. Designed for maximum
-   simplicity — chicken breast, tuna, pasta, broccoli, eggs, banana, whey.
+   Real-time dashboard that tells the user exactly what to eat and when.
+   Built around predictability after a complexity-driven adherence break:
+   one base meal repeated three times, one egg meal, four fixed times.
 
    USER PROFILE (Apr 2026):
    - 30M, 169cm, 73.9kg
@@ -47,38 +47,42 @@
    - Sleep target: 22:30
    - Goal: fat loss primary, recomp secondary
 
-   CORE PRINCIPLES:
-   1. Carbs BEFORE the gym — pasta in meals 1-3 on training days.
-      Glycogen-loaded sessions perform measurably better.
-   2. Insulin cycling — 4-hour meal spacing creates fat-burning windows
-      between meals. Last meal is no-carb so insulin returns to baseline
-      before sleep, allowing the GH pulse during deep sleep.
-   3. Tuna pre-gym (Mon-Fri) — digests ~20% faster than chicken, leaves
-      less in the stomach during training. 1 tin/day × 4 days = 4 tins/week,
-      exactly at EFSA mercury limit for skipjack. Saturday uses chicken.
-   4. Egg distribution: 2 in meal 1, 4 in meal 4. Concentrates fat at the
-      end of the day for sustained overnight protein delivery.
-   5. Stim-free pre-workout (Body Fuel) — citrulline + beta-alanine, no
-      caffeine. Removes sleep disruption and cortisol spike. The 60-min
-      timing requirement disappears; banana+pre at 40 min before gym.
-   6. Rest days: pasta only in meal 1 (low carbs all afternoon for sustained
-     fat oxidation). Auto-detected: Sunday (0) and Thursday (4).
+   CORE PRINCIPLES (post-adherence-rebuild, 2026-04-23):
+   1. UNIFORM TIMING — meals at 08:30 / 12:30 / 16:30 / 20:30 every day,
+      training or rest. Four hours apart, no exceptions, no preset-specific
+      drift. The point is to make the schedule memorisable so the dashboard
+      becomes optional. Past attempt to optimise timing by preset cost the
+      user 5 days of off-script eating when the schedule got too clever.
+   2. ONE BASE MEAL — chicken (75g) + red lentil pasta (55g) + broccoli (80g)
+      at M1, M2, M3. Prep in volume, weigh once, eat without thinking.
+   3. ONE EGG MEAL — M4 is the only place eggs land. 6 large eggs in one
+      go clears the daily fat floor and concentrates amino delivery into
+      the overnight window. Plus 1 scoop casein for slow overnight release.
+   4. PRE-WORKOUT FUEL is a SATELLITE event — 30 min before the gym,
+      training days only. Banana + Body Fuel + 1 scoop whey. Carries
+      performance, doesn't disrupt the meal cadence.
+   5. NO CARBS AT M4 — insulin returns to baseline before sleep, allowing
+      the largest GH pulse of the day during the first 90 min of deep sleep.
+   6. REST DAYS = same 4 base/egg meals, no fuel, no gym. Same dashboard,
+      same prep. Auto-detected: Sunday (0) and Thursday (4).
 
-   WEEKLY MACROS (verified 2026-04-15, deficit cut for ~0.75-0.85 kg/wk):
-   - Mon-Fri (afternoon, tuna): ~1,561 kcal · 197P · 100C · 37F
-   - Sat (evening, chicken):    ~1,541 kcal · 192P · 100C · 37F
-   - Sun/Thu (rest):            ~1,170 kcal · 158P ·  47C · 35F
-   - WEEKLY AVERAGE:            ~1,447 kcal · 185P ·  85C · 37F
-   - TDEE ~2,270 (Katch-McArdle, LBM 55.3kg) → deficit ~823 kcal/day → ~0.75 kg/wk
-     + 10k-step NEAT adds ~30-50 kcal/day → actual ~0.80-0.85 kg/wk
+   WEEKLY MACROS (recomputed 2026-04-23 for the uniform plan):
+   - Training days (5×):       ~1,573 kcal · 195P · 105C · 38F
+   - Rest days (Thu/Sun, 2×):  ~1,347 kcal · 170P ·  76C · 36F
+   - WEEKLY AVERAGE:           ~1,508 kcal · 188P ·  97C · 37F
+   - TDEE ~2,270 (Katch-McArdle, LBM 55.3kg) → deficit ~762 kcal/day
+     + 10k-step NEAT adds ~30-50 kcal/day → ~0.7 kg/wk loss
+   - Slightly slower than the pre-rebuild plan (which targeted 0.8 kg/wk)
+     but adherence > peak-week deficit. Goal is sustained loss, not speed.
 
    FOOD SOURCING — Tesco Dun Laoghaire, Ireland:
    - Chicken breast (Tesco Irish portions): 110 kcal / 24.7P / 1.18F per 100g cooked
-   - Skipjack tuna in brine (Sunny South): 101 kcal / 23P / 1F per 100g drained
    - Red lentil pasta (Tesco High Protein): 186 kcal / 12.3P / 31.1C per 100g cooked
    - Broccoli: 40 kcal / 4.3P / 5.7C / 0.6F per 100g (Tesco loose, label verified)
    - Eggs: 77.5 kcal each (large)
    - Banana: 105 kcal each (medium)
+   - Tuna in brine: kept in the FOODS table for ad-hoc swaps but no longer
+     on the schedule (the pre-gym slot it served was removed in the rebuild).
 
    SUPPLEMENTS (not displayed in event cards):
    - Body Fuel pre-workout (stim-free) — 1 scoop with banana, 30 min pre-gym
@@ -89,22 +93,18 @@
    - ON Gold Standard 100% Casein — 1 scoop in MEAL 4 every day (overnight slow release, 24g P)
    - High5 Zero electrolyte tab — sipped during gym sessions
 
-   WORKOUT PRESETS:
-   - AFTERNOON (gym 15:15) — Mon-Fri, on-call days. Meals at 08:30,
-     12:00, 13:45, 14:45 (banana+pre+whey, 30 min pre-gym), 17:00
-     (post-gym shake), 20:30. Tuna in meal 3.
-   - EVENING (gym 18:00) — Saturday only. Meals at 08:30, 12:30, 16:30,
-     17:30 (banana+pre+whey, 30 min pre-gym), 19:45 (post-gym shake),
-     20:30. Chicken in meal 3 (mercury cap).
+   WORKOUT PRESETS (only the gym slot differs, meal times don't move):
+   - AFTERNOON (gym 15:15) — Mon-Fri, on-call days. Banana+fuel at 14:45.
+     M3 at 16:30 lands just after the gym, in the GLUT4 window.
+   - EVENING (gym 18:00) — Saturday only. Banana+fuel at 17:30. M3 at 16:30
+     lands 90 min pre-gym for glycogen top-up.
 
    PORTIONS — identical per meal:
-   - 75g chicken breast (cooked) per chicken meal
-   - 102g tuna (1 whole tin drained) per pre-gym tuna meal (Mon-Fri)
-   - 55g cooked red lentil pasta on training days (M1/M2/M3)
-   - 70g cooked red lentil pasta on rest day M1 only
-   - 80g broccoli per meal (no broccoli in pre-gym M3)
-   - 2 eggs in meal 1, 4 eggs in meal 4
-   - 1 scoop casein in meal 4 (every day)
+   - 75g chicken breast (cooked) at every meal, every day
+   - 55g cooked red lentil pasta at M1, M2, M3 (every day)
+   - 80g broccoli at every meal, every day
+   - 6 eggs at M4 (every day)
+   - 1 scoop casein at M4 (every day)
    - 1 banana + 1 scoop Body Fuel + 1 scoop whey (30 min pre-gym, training days only)
    ================================================================ */
 
@@ -159,19 +159,16 @@ const BREAST = {
   label: "75g chicken breast (cooked)",
 };
 
-/* Determine which meals get eggs.
-   Rule: FIRST meal-type gets 2 eggs, LAST meal-type gets 4 eggs.
-   This concentrates more fat in the last meal for overnight MPS
-   and keeps the first meal lighter for a faster return to the
-   fat-burning trough between meals 1 and 2. Total 6 eggs/day. */
+/* Egg distribution: ALL eggs go in the last meal of the day.
+   6 large eggs = 28.8g fat, single-handedly clears the daily fat floor
+   and pushes amino delivery into the overnight window. One egg meal
+   per day means there is exactly one place to remember eggs — no
+   "did I eat them at breakfast already?" decisions when off-script. */
 const getMealEggs = (events, eventId) => {
   const meals = events.filter(e => e.type === "meal");
   if (meals.length === 0) return 0;
-  const firstId = meals[0].id;
   const lastId = meals[meals.length - 1].id;
-  if (eventId === lastId) return 4;
-  if (eventId === firstId) return 2;
-  return 0;
+  return eventId === lastId ? 6 : 0;
 };
 
 /* Transform a meal's items list:
@@ -278,96 +275,50 @@ const PLENNY_PRO = {
 /* ----------------------------------------------------------------
    MEAL TEMPLATES
    ----------------------------------------------------------------
-   Every meal is built from this small ingredient set:
-   chicken breast, tuna (pre-gym Mon-Fri only), red lentil pasta,
-   broccoli, eggs, banana, whey, Body Fuel pre-workout.
-
-   Meals differ in whether they include pasta (carb meals) and how
-   many eggs (egg distribution rule: 2 in meal 1, 4 in meal 4).
+   Two templates — that's it.
+     MEAL_CARB  — base meal: chicken + 55g pasta + 80g broccoli.
+                  Used at M1, M2, M3 every day.
+     MEAL_LAST  — egg meal: chicken + broccoli + 1 scoop casein
+                  (+ 6 eggs added by transformMealItems). Used at M4.
+   BANANA_FUEL is a satellite "fuel" event for training days only
+   (30 min before gym).
 
    The `id` field must be unique across all events in a preset
    so that Plenny Pro swaps work correctly per-meal.
    ---------------------------------------------------------------- */
 
-/* Carb + Protein meal — chicken + 70g pasta + 80g broccoli.
-   The base meal across both training and rest day templates.
-   Eggs are added at render time by the egg-distribution rule. */
+/* BASE MEAL — chicken + 55g pasta + 80g broccoli.
+   The ONLY composition for meals 1, 2, 3 — every day, training or rest.
+   Uniformity is the point: one meal you can prep in volume, weigh once,
+   eat four hours later without deciding anything. Eggs and casein land
+   in MEAL 4 (see MEAL_LAST below). */
 const MEAL_CARB = {
   id: "carb", label: "MEAL", type: "meal",
-  tag: "CARB + PROTEIN",
+  tag: "BASE MEAL",
   items: [
     "chicken breast",
     "55g red lentil pasta",
     "80g broccoli",
   ],
-  note: "Lean protein + slow-digesting carbs + fibrous green. Lentil pasta keeps insulin response moderate (lower GI than wheat pasta). Eat first the broccoli, then the pasta, then the chicken — fibre first slows gastric emptying for a smoother glucose curve.",
+  note: "The base meal. Same composition every meal, every day. Lean protein + slow-digesting carbs + fibrous green. Lentil pasta keeps the insulin response moderate (lower GI than wheat pasta). Eat broccoli first, then pasta, then chicken — fibre first slows gastric emptying for a smoother glucose curve.",
   supplements: [],
 };
 
-/* Pre-gym meal — 1 tin tuna + 1 scoop whey + pasta + broccoli, 90 min
-   before training. Tuna digests ~20% faster than chicken; whey is faster
-   still. Together they deliver a clean amino spike with virtually no fat
-   to slow gastric emptying — the meal is 95% cleared by the time you
-   start lifting. Whey replaces the previous egg here because it gives
-   2x the protein with 1/4 the fat: 12g protein vs 6.3g, 1g fat vs 4.8g.
-   Mercury: 1 tin/workout day × 4 workout days = 4 tins/week (EFSA limit). */
-const MEAL_PRE_GYM = {
-  id: "pre-gym", label: "MEAL", type: "meal",
-  tag: "PRE-GYM · TUNA + CARBS",
-  useTuna: true,
-  items: [
-    "tuna",
-    "55g red lentil pasta",
-  ],
-  note: "Pre-gym solid food: tuna + pasta only. Tuna delivers clean fast-digesting protein with ~0.6g fat so gastric emptying is quick. Pasta tops off muscle glycogen. Eat 90 min before training — by gym time your stomach is essentially empty. No broccoli here (saves fibre volume at the bell). Whey is in the banana+fuel slot 60 min later, where it peaks during the session instead of before it.",
-  supplements: [],
-};
-
-/* No-carb meal — chicken + broccoli only.
-   Used on rest days for meals 2 and 3 to keep insulin low across the
-   afternoon, maximising fat oxidation between meals. Lean meal — only
-   ~131 kcal — leaves room for a heavier last meal. */
-const MEAL_NOCARB = {
-  id: "nocarb", label: "MEAL", type: "meal",
-  tag: "PROTEIN + FAT · NO CARBS",
-  items: [
-    "chicken breast",
-    "80g broccoli",
-  ],
-  note: "No carbs = low insulin = uninterrupted fat oxidation through the afternoon. Lean breast keeps protein high without adding fat. Save your fat budget for the last meal where it supports overnight GH and MPS.",
-  supplements: [],
-};
-
-/* Last meal of the day — chicken + broccoli + 4 eggs + whey.
-   Eggs provide 19g fat to push daily fat above the hormone floor.
-   Whey gives a fast leucine pulse, chicken+eggs provide a slow,
-   sustained amino release through the early sleep window. */
+/* MEAL 4 — the egg meal. Chicken + broccoli + 6 eggs + 1 scoop casein.
+   All 6 daily eggs land here in one go (28.8g fat clears the hormone
+   floor in a single sitting, no need to spread them across meals).
+   Casein layers slow protein across the first half of sleep, no carbs
+   so insulin returns to baseline before the GH pulse fires. */
 const MEAL_LAST = {
   id: "last", label: "MEAL", type: "meal",
-  tag: "PROTEIN + FAT · LAST MEAL",
+  tag: "EGG MEAL · LAST MEAL",
   items: [
     "chicken breast",
     "80g broccoli",
     "1 scoop casein",
   ],
-  note: "Last meal of the day. 4 eggs (added by the meal transform) push fat above the hormone floor and extend overnight protein delivery. 1 scoop ON Gold Standard Casein (24g micellar casein, 4-7h slow release) lands amino acids across the first half of sleep, covering the GH/MPS window. No carbs = low insulin going into sleep, allowing the largest GH pulse of the day during the first 90 minutes of slow-wave sleep.",
+  note: "Last meal of the day. 6 eggs (added by the meal transform) cover the daily fat floor in one sitting and push amino delivery into the overnight window. 1 scoop ON Gold Standard Casein (24g micellar casein, 4-7h slow release) lands amino acids across the first half of sleep. No carbs = low insulin going into sleep, allowing the largest GH pulse of the day during the first 90 minutes of slow-wave sleep.",
   supplements: ["Omega-3 — 1 capsule (fat present aids absorption)"],
-};
-
-/* Post-gym whey shake — sits 15-30 minutes after the gym session.
-   Single-purpose event: deliver a fast leucine spike during the
-   exercise-induced insulin sensitivity window (lasts 60-90 min after
-   training, GLUT4 still on cell surface). This adds a 5th MPS pulse
-   to the day for training days. Pure protein, no carbs, no fat — keeps
-   the post-workout fat oxidation environment intact. */
-const POST_GYM_SHAKE = {
-  id: "post-gym-shake", label: "POST-GYM SHAKE", type: "fuel",
-  tag: "RECOVERY · 5TH MPS PULSE",
-  items: [
-    "1 scoop whey (ON Gold Standard)",
-  ],
-  note: "Drink within 15-30 min of finishing your last set. GLUT4 is still on the muscle cell surface from contraction-induced upregulation, so amino acids are pulled into muscle aggressively. This is the most insulin-sensitive window of your day. No carbs needed — your meal 3 carbs already topped off glycogen pre-workout.",
-  supplements: [],
 };
 
 /* Banana + pre-workout — sits 40 minutes before the gym session.
@@ -401,15 +352,18 @@ const makeGym = (carbMeals) => ({
 /* ----------------------------------------------------------------
    WORKOUT PRESETS
    ----------------------------------------------------------------
-   Each preset arranges the same food across different time slots
-   depending on when the gym session happens. The KEY CONSTRAINT:
-   carb (pasta) meals go BEFORE the gym for glycogen loading.
-   Post-gym / evening meals are no-carb (chicken + broccoli only).
+   Both presets share the SAME 4 meal times (08:30 / 12:30 / 16:30 / 20:30)
+   and the SAME meal compositions. The only thing that changes between
+   the afternoon (Mon-Fri) and evening (Sat) preset is the gym slot and
+   the BANANA_FUEL satellite event that lands 30 min before it.
 
-   All presets total 480g chicken (120g × 4), 330g cooked pasta (110g × 3),
-   400g broccoli (100g × 4), 1 banana, 1 egg = ~1,744 kcal.
+   M3 at 16:30 happens to land in different positions relative to gym:
+     - afternoon preset: M3 is post-gym (eaten as soon as user gets back)
+     - evening preset:   M3 is 90 min pre-gym (glycogen top-up)
+   Either way the meal time itself is fixed at 16:30.
 
-   The egg always goes in the LAST meal of the day.
+   Daily totals (training days): ~1,573 kcal · 195P · 105C · 38F.
+   Rest days (no fuel event):    ~1,347 kcal · 170P ·  76C · 36F.
    ---------------------------------------------------------------- */
 
 const PRESETS = {
@@ -418,25 +372,24 @@ const PRESETS = {
     label: "AFTERNOON",
     gymTime: "15:15",
     desc: "Gym at 15:15 · On-call friendly · Eat at desk",
-    /* Afternoon is designed for on-call days where the user can't leave
-       the laptop until 15:00. Meal spacing optimized for insulin cycling:
-         M1 08:30 → M2 12:00 (3.5h gap, allows fat-oxidation trough)
-         M2 12:00 → M3 13:45 (1h45m, tight but acceptable for pre-gym)
-         M3 13:45 → Banana+whey 14:45 (60 min, whey peaks during session)
-         Gym 15:15-16:35
-         M4 20:30 (~4h after gym, chicken+eggs+casein overnight stack)
-       This gives 4 MPS pulses per training day (M1, M2, M3+BF_whey, M4_casein).
-       The separate post-gym whey shake was cut in the deficit trim — the
-       BANANA_FUEL whey already covers the GLUT4 window. */
+    /* Afternoon preset — Mon-Fri. Meals locked to 08:30 / 12:30 / 16:30 / 20:30
+       no matter what (uniformity > optimisation, after the user lost 5 days
+       to off-script sweets when the schedule got too clever).
+         M1 08:30 — base meal
+         M2 12:30 — base meal (2h45m before gym, glycogen-loaded)
+         BANANA + PRE + WHEY 14:45 (30 min pre-gym, satellite event)
+         GYM 15:15-16:35
+         M3 16:30 — base meal (overlaps tail-end of gym, eaten on return)
+         M4 20:30 — egg meal (chicken + broccoli + 6 eggs + casein) */
     events: [
-      { ...MEAL_CARB,        time: "08:30", endTime: "12:00", id: "carb-1", label: "MEAL 1" },
-      { ...MEAL_CARB,        time: "12:00", endTime: "13:45", id: "carb-2", label: "MEAL 2" },
-      { ...MEAL_PRE_GYM,     time: "13:45", endTime: "14:45", label: "MEAL 3" },
+      { ...MEAL_CARB,        time: "08:30", endTime: "12:30", id: "carb-1", label: "MEAL 1" },
+      { ...MEAL_CARB,        time: "12:30", endTime: "14:45", id: "carb-2", label: "MEAL 2" },
       { ...BANANA_FUEL,      time: "14:45", endTime: "15:15" },
-      { ...makeGym(3),       time: "15:15", endTime: "16:35" },
-      { ...MEAL_LAST,        time: "20:30", endTime: "22:30", label: "MEAL 4",
-        tag: "POST-WORKOUT · PROTEIN + FAT",
-        note: "~4 hours after the gym. Chicken + 4 eggs + 1 scoop casein provides slow-digesting protein for overnight recovery. Eggs push fat above the hormone floor. Casein delivers aminos across the first half of sleep. No carbs — you had plenty pre-gym. Sleep by 22:30 for the GH pulse during deep sleep." },
+      { ...makeGym(2),       time: "15:15", endTime: "16:25" },
+      { ...MEAL_CARB,        time: "16:30", endTime: "20:30", id: "carb-3", label: "MEAL 3",
+        tag: "POST-GYM · BASE MEAL",
+        note: "Eat as soon as you get back from the gym. Same base meal as M1 and M2 — no thinking required. Pasta carbs land in the GLUT4 sensitivity window for fast glycogen restoration; chicken delivers leucine for the post-workout MPS pulse." },
+      { ...MEAL_LAST,        time: "20:30", endTime: "22:30", label: "MEAL 4" },
     ],
   },
 
@@ -444,24 +397,25 @@ const PRESETS = {
     id: "evening",
     label: "EVENING",
     gymTime: "18:00",
-    desc: "Gym at 18:00 · Saturday only · Chicken pre-gym",
-    /* Evening preset is for Saturday — the 5th training day of the week.
-       Tuna is capped at 4 tins/week (Mon-Fri) due to mercury, so Saturday
-       uses chicken breast in the pre-gym meal. Banana + Body Fuel + whey
-       at 17:30 (30 min pre-gym). Post-gym whey was cut in the deficit trim —
-       BANANA_FUEL whey covers the GLUT4 window. M4 at 20:30 closes the day. */
+    desc: "Gym at 18:00 · Saturday only",
+    /* Evening preset — Saturday. Same 4 fixed meal times as Mon-Fri.
+       M3 at 16:30 happens to land 90 min before gym — convenient pre-gym
+       window without having to think about it.
+         M1 08:30 — base meal
+         M2 12:30 — base meal
+         M3 16:30 — base meal (90 min pre-gym, glycogen top-up)
+         BANANA + PRE + WHEY 17:30 (30 min pre-gym)
+         GYM 18:00-19:30
+         M4 20:30 — egg meal */
     events: [
       { ...MEAL_CARB,        time: "08:30", endTime: "12:30", id: "carb-1", label: "MEAL 1" },
       { ...MEAL_CARB,        time: "12:30", endTime: "16:30", id: "carb-2", label: "MEAL 2" },
-      { ...MEAL_PRE_GYM,     time: "16:30", endTime: "17:30", label: "MEAL 3", useTuna: false,
-        tag: "PRE-GYM · CHICKEN + CARBS",
-        items: ["chicken", "55g red lentil pasta"],
-        note: "Saturday uses chicken instead of tuna (mercury cap: 4 tins/week, used Mon-Fri). Pasta tops off muscle glycogen. Eat 90 min before training. Whey is in the banana+fuel slot 60 min later." },
+      { ...MEAL_CARB,        time: "16:30", endTime: "17:30", id: "carb-3", label: "MEAL 3",
+        tag: "PRE-GYM · BASE MEAL",
+        note: "Same base meal as M1 and M2 — happens to land 90 min pre-gym. Pasta tops off muscle glycogen for the lower-body session. By gym time most of the meal has cleared the stomach." },
       { ...BANANA_FUEL,      time: "17:30", endTime: "18:00" },
       { ...makeGym(3),       time: "18:00", endTime: "19:30" },
-      { ...MEAL_LAST,        time: "20:30", endTime: "22:30", label: "MEAL 4",
-        tag: "POST-WORKOUT · PROTEIN + FAT",
-        note: "~1h after the gym. Chicken + 4 eggs + 1 scoop casein provides slow-digesting protein for overnight recovery. Eggs push fat above the hormone floor. Casein covers first half of sleep. No carbs — you've had plenty already today. Sleep by 22:30 for the GH pulse during deep sleep." },
+      { ...MEAL_LAST,        time: "20:30", endTime: "22:30", label: "MEAL 4" },
     ],
   },
 };
@@ -469,64 +423,23 @@ const PRESETS = {
 /* ----------------------------------------------------------------
    REST DAY MEALS
    ----------------------------------------------------------------
-   Only the FIRST meal includes pasta. Remaining meals are
-   chicken + broccoli +/- eggs. This keeps insulin low for 12+
-   hours, maximising fat oxidation on the days you're not training.
+   Identical schedule to training days — same 4 fixed times, same
+   base meal at M1/M2/M3, same egg meal at M4. The only thing missing
+   is the pre-gym fuel and the gym itself.
 
-   Total: 360g chicken (cooked) + 70g pasta + 320g broccoli + 6 eggs
-   + 2 scoops whey = ~1,231 kcal · 168P · 50C · 37F
+   Uniformity is the point: do not make the user re-learn the day on
+   Thu/Sun. The slight bump in rest-day carbs (vs the old "pasta only
+   in M1" design) is the trade-off paid for predictability.
 
    Auto-triggered on Sunday (0) and Thursday (4) to match the user's
    Push/Pull/Legs/REST/Upper/Lower/REST split.
    Can be manually overridden via the tappable day-type badge.
    ---------------------------------------------------------------- */
 const REST_EVENTS = [
-  {
-    id: "rest-1", label: "MEAL 1", type: "meal",
-    tag: "LAST CARB MEAL TODAY",
-    time: "09:30", endTime: "12:30",
-    items: [
-      "chicken breast",
-      "70g red lentil pasta",
-      "80g broccoli",
-    ],
-    note: "Pushed to 09:30 on rest days for an extended fasted morning window. Insulin is at its daily low from 07:00-09:30, growth hormone is highest, and adipose lipolysis is maximal — ideal for a 60-minute fasted walk if you can fit it in. This is the deepest fat-oxidation window of the week. The pasta gives ~31g carbs, just enough to keep thyroid and metabolism responsive. No carbs after this on rest days.",
-    supplements: [],
-  },
-  {
-    id: "rest-2", label: "MEAL 2", type: "meal",
-    tag: "NO CARBS",
-    time: "12:30", endTime: "16:30",
-    items: [
-      "chicken breast",
-      "80g broccoli",
-    ],
-    note: "Lean middle meal. No carbs, no eggs. Insulin stays low — fat oxidation continues uninterrupted through the afternoon.",
-    supplements: ["Omega-3 — 1 capsule"],
-  },
-  {
-    id: "rest-3", label: "MEAL 3", type: "meal",
-    tag: "NO CARBS",
-    time: "16:30", endTime: "20:30",
-    items: [
-      "chicken breast",
-      "80g broccoli",
-    ],
-    note: "Simple. Chicken and broccoli. Fat oxidation continues. Stay hydrated.",
-    supplements: ["Creatine 5g standalone — rest day maintenance dose"],
-  },
-  {
-    id: "rest-4", label: "MEAL 4", type: "meal",
-    tag: "NO CARBS · LAST MEAL",
-    time: "20:30", endTime: "22:30",
-    items: [
-      "chicken breast",
-      "80g broccoli",
-      "1 scoop casein",
-    ],
-    note: "Low insulin going into sleep. Chicken + casein provide slow-digesting protein for overnight muscle repair — casein's 4-7h release covers the GH pulse window. Eggs (added by transform) provide overnight fat. Maximises overnight GH release and fat oxidation. Sleep by 22:30.",
-    supplements: [],
-  },
+  { ...MEAL_CARB, id: "rest-1", label: "MEAL 1", time: "08:30", endTime: "12:30" },
+  { ...MEAL_CARB, id: "rest-2", label: "MEAL 2", time: "12:30", endTime: "16:30" },
+  { ...MEAL_CARB, id: "rest-3", label: "MEAL 3", time: "16:30", endTime: "20:30" },
+  { ...MEAL_LAST, id: "rest-4", label: "MEAL 4", time: "20:30", endTime: "22:30" },
 ];
 
 /* ----------------------------------------------------------------
@@ -625,7 +538,7 @@ const saveSwaps = (v) => {
    Generates insulin / glucose / glycogen / fat-ox / amino / GH /
    cortisol / caffeine curves from the current day's events. The
    shape of every curve shifts with the meal times and gym slot,
-   so when the user changes preset (morning/midday/evening) or
+   so when the user changes preset (afternoon/evening) or
    toggles rest day, the physiological response updates live.
 
    Values are normalised to 0-100 (relative % of daily range) so
@@ -1409,9 +1322,7 @@ function Dashboard() {
               <div style={{ fontSize: "12px", color: "#475569", marginTop: "8px", lineHeight: "1.5" }}>
                 {rest
                   ? "First meal at 08:30. No gym today — recover and let muscles repair."
-                  : preset === "morning"
-                    ? "Pre-gym fuel at 06:30. Skip the fasted walk — gym IS the exercise today."
-                    : "Fasted walk while insulin is low — peak fat oxidation window. First meal at 08:30."
+                  : "First meal at 08:30. Optional fasted walk before then — peak fat-oxidation window while insulin is at its overnight low."
                 }
               </div>
             </div>
